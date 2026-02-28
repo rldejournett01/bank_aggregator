@@ -15,14 +15,26 @@ ACESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(bytes(password, encoding="utf-8"),
-                         bcrypt.gensalt(),
-                         )
+
+    password_bytes = password.encode('utf-8') #Converted string -> bytes
+    salt = bcrypt.gensalt() #already bytes
+    hash_bytes = bcrypt.hashpw(password_bytes, salt)
+
+    return hash_bytes.decode('utf-8') #returns string
+                         
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(bytes(plain_password, encoding="utf-8"),
-                         hashed_password,
-                          )
+
+    plain_bytes = plain_password.encode('utf-8') #Converted string -> bytes
+    hashed_bytes = hashed_password.encode('utf-8') #
+
+    #DEBUG:
+    # print(f"Hash string: {hashed_password}")
+    # print(f"Hash bytes: {hashed_bytes}")
+    # print(f"Length: {len(hashed_bytes)}")
+    # print(f"Starts with: {hashed_bytes[:4]}")
+
+    return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
 def create_acess_token(data: dict):
     to_encode = data.copy()

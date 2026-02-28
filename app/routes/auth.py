@@ -10,8 +10,6 @@ from app.models.user import User
 #Router
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-#TEMP storage (will be moved to DB)
-fake_users_db = {}
 
 #Sign Up Route with dependency injection
 @router.post("/signup")
@@ -26,7 +24,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     #create new User
     new_user = User(
         email=user.email,
-        hash_password=hash_password(user.password)
+        hashed_password=hash_password(user.password)
     )
 
     db.add(new_user)
