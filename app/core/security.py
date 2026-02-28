@@ -20,13 +20,13 @@ def hash_password(password: str) -> str:
     salt = bcrypt.gensalt() #already bytes
     hash_bytes = bcrypt.hashpw(password_bytes, salt)
 
-    return hash_bytes.decode('utf-8') #returns string
+    return hash_bytes.decode('utf-8') #Decodes the bytes to be a string, returns string as promised
                          
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     plain_bytes = plain_password.encode('utf-8') #Converted string -> bytes
-    hashed_bytes = hashed_password.encode('utf-8') #
+    hashed_bytes = hashed_password.encode('utf-8') #converted string -> bytes
 
     #DEBUG:
     # print(f"Hash string: {hashed_password}")
@@ -34,7 +34,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     # print(f"Length: {len(hashed_bytes)}")
     # print(f"Starts with: {hashed_bytes[:4]}")
 
-    return bcrypt.checkpw(plain_bytes, hashed_bytes)
+    return bcrypt.checkpw(plain_bytes, hashed_bytes) #return True/False as promised
 
 def create_acess_token(data: dict):
     to_encode = data.copy()
