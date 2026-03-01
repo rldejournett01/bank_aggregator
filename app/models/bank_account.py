@@ -15,4 +15,6 @@ class BankAccount(Base):
     account_type = Column(String, nullable=False)
     balance = Column(Numeric(12, 2), default=0)
 
-    created_at = Column(DateTime, default=timezone.utc)
+    from datetime import datetime, timezone
+
+created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
