@@ -47,17 +47,17 @@ def create_link_token(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
+from app.schemas.plaid import PublicTokenExchangeIn
 # -------------------------------------------------
 # Exchange Public Token
 # -------------------------------------------------
 @router.post("/exchange")
 def exchange_public_token(
-    payload: dict,
+    body: PublicTokenExchangeIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    public_token = payload.get("public_token")
+    public_token = body.public_token
     if not public_token:
         raise HTTPException(status_code=400, detail="public_token required")
 

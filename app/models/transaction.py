@@ -14,4 +14,6 @@ class Transaction(Base):
     description = Column(String, nullable=False)
     transaction_type = Column(String, nullable=False)
 
+    external_id = Column(String, unique=True, index=True, nullable=True)
+    
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -5,6 +5,7 @@ from app.models import user
 from app.routes import dashboard
 from app.routes import transactions
 from app.routes import plaid
+from app.routes import plaid_sync
 
 user.Base.metadata.create_all(bind=engine)
 
@@ -17,6 +18,7 @@ app.include_router(accounts.router)
 app.include_router(dashboard.router)
 app.include_router(transactions.router)
 app.include_router(plaid.router)
+app.include_router(plaid_sync.router)
 
 @app.get("/")
 def root():
