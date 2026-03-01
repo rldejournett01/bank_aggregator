@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth, users, accounts
 from app.core.database import engine
 from app.models import user
@@ -19,6 +20,14 @@ app.include_router(dashboard.router)
 app.include_router(transactions.router)
 app.include_router(plaid.router)
 app.include_router(plaid_sync.router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
