@@ -13,7 +13,7 @@ class LinkedAccount(Base):
 
     #Plaid identifiers
     item_id = Column(String, unique=True, index=True, nullable=False)
-    access_token = Column(String, nullable=False) #encrpyt later
+    access_token = Column(String, nullable=False) #encrpyted during plaid exchange
 
     #Institution metadata (helps UI + debugging)
     institution_id = Column(String, index=True, nullable=True)

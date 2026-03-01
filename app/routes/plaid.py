@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.deps import get_db
+
+from app.core.crypto import encrypt_text
+from app.core.crypto import decrypt_text
 from app.models.linked_account import LinkedAccount
 
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
@@ -73,7 +76,7 @@ def exchange_public_token(
         linked = LinkedAccount(
             user_id=current_user.id,
             item_id=item_id,
-            access_token=access_token,
+            access_token=encrypt_text(access_token),
         )
 
         db.add(linked)

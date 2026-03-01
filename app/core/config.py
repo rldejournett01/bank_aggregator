@@ -12,12 +12,20 @@ class Settings(BaseModel):
     PROJECT_NAME: str = "Bank Aggregator API"
     ENVIRONMENT: str = Field(default="development")
 
+
     # =====================
     # Security
     # =====================
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+
+    # =====================
+    # FERNET KEY
+    # =====================
+
+    FERNET_KEY: str
 
     # =====================
     # Plaid
@@ -47,4 +55,5 @@ settings = Settings(
     PLAID_CLIENT_ID=os.getenv("PLAID_CLIENT_ID"),
     PLAID_SECRET=os.getenv("PLAID_SECRET"),
     PLAID_ENV=os.getenv("PLAID_ENV", "sandbox"),
+    FERNET_KEY=os.getenv("FERNET_KEY")
 )
