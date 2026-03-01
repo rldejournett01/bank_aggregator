@@ -2,14 +2,12 @@
 import bcrypt
 from datetime import datetime, timedelta, timezone
 from jose import jwt
-
+from app.core.config import settings
 
 
 #JWT settings  (TODO: move these settings to env vars)
 
-SECRET_KEY = "MySecretKey810!"
-ALGORITHM = "HS256"
-ACESS_TOKEN_EXPIRE_MINUTES = 30
+
 
 
 def hash_password(password: str) -> str:
@@ -36,10 +34,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES) 
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES) 
     to_encode.update({"exp": expire})
 
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode,settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 '''
 Passwords are never reversible 
@@ -71,7 +69,7 @@ def get_current_user(
 
         try:
              
-             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
              user_id: str = payload.get("sub")
              if user_id is None:
                   raise credentials_exception
