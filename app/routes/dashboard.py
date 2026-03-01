@@ -5,6 +5,7 @@ from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.bank_account import BankAccount
 from app.models.user import User
+from decimal import Decimal
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -22,7 +23,7 @@ def dashboard(
         ).scalar()
     
     return {
-        "total_balance": float(total_balance),
+        "total_balance": Decimal(total_balance),
         "accounts": accounts
     }
 
