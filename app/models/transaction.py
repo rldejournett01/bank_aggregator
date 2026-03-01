@@ -12,5 +12,6 @@ class Transaction(Base):
 
     amount = Column(Numeric(12,2), nullable=False)
     description = Column(String, nullable=False)
+    transaction_type = Column(String, nullable=False)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
