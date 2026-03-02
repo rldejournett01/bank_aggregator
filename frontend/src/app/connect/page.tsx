@@ -54,22 +54,28 @@ export default function ConnectPage() {
   }, [ready, token]);
 
   const onSuccess = useMemo(
-    () => async (public_token: string) => {
-      if (!token) return;
-      try {
+    () =>
+      async (public_token: string, metadata: any) => {
+        if (!token) return;
+
+        // Plaid Link provides institution metadata (name + id) after the user selects a bank
+        const institution_id = metadata?.institution?.institution_id ?? null;
+        const institution_name = metadata?.institution?.name ?? null;
+
         setStatus("Link successful. Securing connection...");
+
+        // Send public_token + institution metadata to backend for persistence
         await apiFetch("/plaid/exchange", {
           method: "POST",
           token,
-          body: { public_token },
+          body: { public_token, institution_id, institution_name },
         });
+
         setStatus("Bank connected ✅");
+
+        // Refresh the linked institutions list in the UI
         await loadLinked();
-      } catch (e: any) {
-        console.error("Exchange failed:", e);
-        setStatus(e.message ?? "Failed to exchange token");
-      }
-    },
+      },
     [token]
   );
 
