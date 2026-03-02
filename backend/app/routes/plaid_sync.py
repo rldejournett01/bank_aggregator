@@ -89,43 +89,58 @@ def sync_plaid(
             tx_resp = plaid_client.transactions_get(tx_req).to_dict()
             plaid_transactions = tx_resp.get("transactions", [])
 
-            # Insert transactions idempotently
+            # -------------------------------------------------
+            # Insert transactions (idempotent)
+            # -------------------------------------------------
             for pt in plaid_transactions:
+                # Stable Plaid transaction id (used for idempotency)
                 plaid_tx_id = pt["transaction_id"]
+
+                # Human-readable transaction name
                 name = pt.get("name") or "Transaction"
-                amount = Decimal(str(pt.get("amount", 0)))
 
-                # Plaid amount is usually positive for outflow; many apps store outflow as negative.
-                # We'll store: outflow = -amount, inflow = +amount (more intuitive for balances)
-                # Plaid provides "transaction_type"/"payment_channel" but simplest:
-                signed_amount = -amount
+                # Plaid amount is usually positive for outflow
+                # We store outflows as negative values for consistency
+                raw_amount = Decimal(str(pt.get("amount", 0)))
+                signed_amount = -abs(raw_amount)
 
-                # Check if tx already exists
+                # Determine transaction type
+                # Plaid may provide "transaction_type" or "payment_channel"
+                # Fallback ensures DB NOT NULL constraint is always satisfied
+                tx_type = (
+                    pt.get("transaction_type")
+                    or pt.get("payment_channel")
+                    or "unknown"
+                )
+
+                # Skip if transaction already exists (idempotent sync)
                 exists = db.query(Transaction).filter(
                     Transaction.external_id == plaid_tx_id
                 ).first()
                 if exists:
                     continue
 
-                # Attach to an account: Plaid tx has account_id, map by name/institution for now
-                # Later: store plaid_account_id in BankAccount to map perfectly.
-                account_id = pt.get("account_id")
-
-                # naive mapping: pick first account with same institution (upgrade later)
+                # TEMP mapping: attach transaction to an account by institution
+                # ⚠️ Next increment: map using plaid_account_id for correctness
                 account = db.query(BankAccount).filter(
                     BankAccount.user_id == current_user.id,
                     BankAccount.institution == (item.institution_name or "Unknown Institution")
                 ).first()
 
+                # If no matching account exists, skip to avoid orphaned transactions
                 if not account:
-                    continue  # avoid inserting orphan tx
+                    continue
 
+                # Create transaction record
                 new_tx = Transaction(
                     account_id=account.id,
                     external_id=plaid_tx_id,
                     amount=signed_amount,
                     description=name,
+                    transaction_type=tx_type,  # Never None
                 )
+
+                # Stage insert
                 db.add(new_tx)
 
         db.commit()
