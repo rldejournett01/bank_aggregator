@@ -1,27 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.deps import get_db
 
+from app.core.deps import get_db
 from app.core.crypto import encrypt_text
-from app.core.crypto import decrypt_text
 from app.models.linked_account import LinkedAccount
 
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 from plaid.model.products import Products
 from plaid.model.country_code import CountryCode
-from plaid.model.item_public_token_exchange_request import (
-    ItemPublicTokenExchangeRequest,
-)
+from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 
 from app.core.security import get_current_user
 from app.integrations.plaid_client import plaid_client
 from app.models.user import User
+from app.schemas.plaid import PublicTokenExchangeIn
+from app.schemas.linked_account import LinkedAccountOut
 
-router = APIRouter(
-    prefix="/plaid",
-    tags=["Plaid"]
-)
+router = APIRouter(prefix="/plaid", tags=["Plaid"])
+
 
 # -------------------------------------------------
 # Create Link Token
@@ -30,6 +27,12 @@ router = APIRouter(
 def create_link_token(
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Creates a Plaid link_token for the logged-in user.
+
+    Frontend uses this link_token to open Plaid Link.
+    Plaid Link then returns a public_token, which we exchange server-side.
+    """
     try:
         request = LinkTokenCreateRequest(
             products=[Products("transactions")],
@@ -47,7 +50,7 @@ def create_link_token(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-from app.schemas.plaid import PublicTokenExchangeIn
+
 # -------------------------------------------------
 # Exchange Public Token
 # -------------------------------------------------
@@ -57,26 +60,59 @@ def exchange_public_token(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Exchanges a Plaid public_token for:
+      - access_token (must be encrypted and stored)
+      - item_id (unique identifier for the linked institution)
+
+    IMPORTANT:
+    - We prevent duplicates using item_id.
+    - If item already exists, we "heal" missing institution metadata
+      (institution_id/name) if the frontend provides it now.
+    """
     public_token = body.public_token
     if not public_token:
         raise HTTPException(status_code=400, detail="public_token required")
 
     try:
+        # 1) Exchange public_token -> access_token + item_id
         request = ItemPublicTokenExchangeRequest(public_token=public_token)
         response = plaid_client.item_public_token_exchange(request)
 
         access_token = response["access_token"]
         item_id = response["item_id"]
 
-        # Prevent duplicate link (Plaid item_id should be unique globally)
-        existing = db.query(LinkedAccount).filter(LinkedAccount.item_id == item_id).first()
+        # 2) Prevent duplicate link by item_id (globally unique)
+        existing = db.query(LinkedAccount).filter(
+            LinkedAccount.item_id == item_id
+        ).first()
+
         if existing:
+            # If the item was linked before we started storing institution metadata,
+            # fill in missing fields now (safe "backfill" behavior).
+            updated = False
+
+            if not existing.institution_id and body.institution_id:
+                existing.institution_id = body.institution_id
+                updated = True
+
+            if not existing.institution_name and body.institution_name:
+                existing.institution_name = body.institution_name
+                updated = True
+
+            # Commit only if we changed something
+            if updated:
+                db.commit()
+
             return {"status": "already_linked"}
 
+        # 3) Create a new LinkedAccount row (store encrypted access_token)
         linked = LinkedAccount(
             user_id=current_user.id,
             item_id=item_id,
             access_token=encrypt_text(access_token),
+            institution_id=body.institution_id,
+            institution_name=body.institution_name,
         )
 
         db.add(linked)
@@ -92,9 +128,8 @@ def exchange_public_token(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    
-    
-from app.schemas.linked_account import LinkedAccountOut
+
+
 # -------------------------------------------------
 # List Linked Banks
 # -------------------------------------------------
@@ -103,6 +138,13 @@ def list_linked_accounts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(LinkedAccount).filter(
-        LinkedAccount.user_id == current_user.id
-    ).order_by(LinkedAccount.created_at.desc()).all()
+    """
+    Returns all linked Plaid items for the current user.
+    Used by the frontend to show "Linked institutions".
+    """
+    return (
+        db.query(LinkedAccount)
+        .filter(LinkedAccount.user_id == current_user.id)
+        .order_by(LinkedAccount.created_at.desc())
+        .all()
+    )
