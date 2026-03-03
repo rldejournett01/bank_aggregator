@@ -135,9 +135,17 @@ def sync_plaid(
                 # Merchant name (may be None)
                 merchant_name = pt.get("merchant_name")
 
-                # Category list example: ["Food and Drink", "Restaurants"]
-                category_list = pt.get("category") or []
-                category = category_list[0] if category_list else "Uncategorized"
+                # 🔹 Extract category intelligently
+
+                # Preferred modern Plaid field
+                pfc = pt.get("personal_finance_category")
+
+                if pfc and isinstance(pfc, dict):
+                    category = pfc.get("primary")
+                else:
+                    # Fallback to legacy category list
+                    category_list = pt.get("category") or []
+                    category = category_list[0] if category_list else "Uncategorized"
 
                 # Pending status
                 pending = pt.get("pending", False)

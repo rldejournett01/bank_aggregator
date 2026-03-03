@@ -44,6 +44,11 @@ export default function AccountDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
 
+  // 🔹 Filter state
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [searchText, setSearchText] = useState<string>("");
+
   // Basic pagination (limit/offset). Later: cursor pagination
   const [limit] = useState<number>(50);
   const [offset, setOffset] = useState<number>(0);
@@ -59,8 +64,17 @@ export default function AccountDetailPage() {
     setErr(null);
 
     try {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      if (searchText) params.append("search", searchText);
+
       const res = await apiFetch<AccountTxResponse>(
-        `/accounts/${accountId}/transactions?limit=${limit}&offset=${offset}`,
+        `/accounts/${accountId}/transactions?${params.toString()}`,
         { token }
       );
       setData(res);
@@ -68,6 +82,31 @@ export default function AccountDetailPage() {
       setErr(e.message ?? "Failed to load account transactions");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // -------------------------------------------------
+  // Delete Account
+  // -------------------------------------------------
+  async function deleteAccount() {
+    if (!token || !accountId) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to permanently delete this account and all its transactions?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await apiFetch(`/accounts/${accountId}`, {
+        method: "DELETE",
+        token,
+      });
+
+      // Redirect to dashboard after deletion
+      window.location.href = "/dashboard";
+    } catch (e: any) {
+      alert(e.message ?? "Failed to delete account");
     }
   }
 
@@ -100,6 +139,19 @@ export default function AccountDetailPage() {
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800 }}>
             {data?.account?.name ?? "Account"}
+            <button
+              onClick={deleteAccount}
+              style={{
+                padding: "10px 12px",
+                backgroundColor: "#e5484d",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              Delete Account
+            </button>
           </h1>
 
           {data?.account ? (
@@ -158,6 +210,77 @@ export default function AccountDetailPage() {
             <span style={{ color: "#666" }}>
               Showing {data.pagination.returned} (offset {offset})
             </span>
+          </div>
+
+          {/* -------------------------------------------------
+    Filters
+------------------------------------------------- */}
+          <div
+            style={{
+              marginTop: 20,
+              padding: 16,
+              border: "1px solid #eee",
+              borderRadius: 8,
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            <h3 style={{ margin: 0 }}>Filters</h3>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <label style={{ fontSize: 12 }}>Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12 }}>End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12 }}>Search</label>
+                <input
+                  type="text"
+                  placeholder="Search description..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    setOffset(0); // reset pagination
+                    load();
+                  }}
+                  style={{ padding: "8px 12px" }}
+                >
+                  Apply
+                </button>
+
+                <button
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setSearchText("");
+                    setOffset(0);
+                    load();
+                  }}
+                  style={{ padding: "8px 12px" }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
           </div>
 
           <h2 style={{ marginTop: 18, fontSize: 18, fontWeight: 800 }}>

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, DateTime, ForeignKey, Numeric
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -25,5 +26,12 @@ class BankAccount(Base):
 
     # Balance is overwritten from Plaid during sync
     balance = Column(Numeric(12, 2), default=0)
+
+    # Relationship to transactions
+    transactions = relationship(
+    "Transaction",
+    backref="account",
+    cascade="all, delete-orphan"
+)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

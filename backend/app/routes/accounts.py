@@ -214,3 +214,35 @@ def get_category_summary(
         }
         for r in rows
     ]
+
+# -------------------------------------------------
+# Delete an account (user-scoped)
+# -------------------------------------------------
+@router.delete("/{account_id}")
+def delete_account(
+    account_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Hard delete:
+    - Removes account
+    - Cascades to delete transactions
+    """
+
+    account = (
+        db.query(BankAccount)
+        .filter(
+            BankAccount.id == account_id,
+            BankAccount.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    db.delete(account)
+    db.commit()
+
+    return {"status": "deleted", "account_id": str(account_id)}
