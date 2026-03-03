@@ -5,6 +5,14 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 
+import {
+  PieChart,
+  Pie,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+
 type Account = {
   id: string;
   name: string;
@@ -32,7 +40,6 @@ export default function AccountDetailPage() {
   const { token, ready, logout } = useAuth();
   const params = useParams();
 
-  // In Next.js App Router, useParams() returns route segments
   const accountId = useMemo(() => {
     const raw = params?.accountId;
     if (typeof raw === "string") return raw;
@@ -40,25 +47,28 @@ export default function AccountDetailPage() {
     return "";
   }, [params]);
 
+  const hasValidAccountId = accountId && accountId !== "undefined";
+
   const [data, setData] = useState<AccountTxResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
 
-  // 🔹 Filter state
+  const [categoryData, setCategoryData] = useState<
+    { category: string; total: string }[]
+  >([]);
+
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [searchText, setSearchText] = useState<string>("");
 
-  // Basic pagination (limit/offset). Later: cursor pagination
   const [limit] = useState<number>(50);
   const [offset, setOffset] = useState<number>(0);
 
-  // Simple guard: don't call the API with empty/undefined
-  const hasValidAccountId = accountId && accountId !== "undefined";
-
+  // -------------------------------------------------
+  // Load Transactions
+  // -------------------------------------------------
   async function load() {
-    if (!token) return;
-    if (!hasValidAccountId) return;
+    if (!token || !hasValidAccountId) return;
 
     setBusy(true);
     setErr(null);
@@ -77,11 +87,29 @@ export default function AccountDetailPage() {
         `/accounts/${accountId}/transactions?${params.toString()}`,
         { token }
       );
+
       setData(res);
     } catch (e: any) {
-      setErr(e.message ?? "Failed to load account transactions");
+      setErr(e.message ?? "Failed to load transactions");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // -------------------------------------------------
+  // Load Category Summary
+  // -------------------------------------------------
+  async function loadCategorySummary() {
+    if (!token || !hasValidAccountId) return;
+
+    try {
+      const res = await apiFetch<
+        { category: string; total: string }[]
+      >(`/accounts/${accountId}/category-summary`, { token });
+
+      setCategoryData(res);
+    } catch (e) {
+      console.error("Failed to load category summary", e);
     }
   }
 
@@ -103,216 +131,204 @@ export default function AccountDetailPage() {
         token,
       });
 
-      // Redirect to dashboard after deletion
       window.location.href = "/dashboard";
     } catch (e: any) {
       alert(e.message ?? "Failed to delete account");
     }
   }
 
+  // -------------------------------------------------
+  // Effects
+  // -------------------------------------------------
   useEffect(() => {
-    // Wait until auth loads token from localStorage
     if (!ready) return;
 
-    // If not logged in, go to login
     if (!token) {
       window.location.href = "/login";
       return;
     }
 
-    // If accountId is bad, show a friendly error instead of calling the API
     if (!hasValidAccountId) {
-      setErr("Invalid account id (the link you clicked did not include an id). Go back and try again.");
+      setErr("Invalid account id.");
       return;
     }
 
-    load().catch((e) => console.error("Account detail load failed:", e));
+    load();
+    loadCategorySummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, token, accountId, offset]);
+
+  // -------------------------------------------------
+  // Chart Data (Only Expenses)
+  // -------------------------------------------------
+  const chartData = categoryData
+    .filter((c) => Number(c.total) < 0) // only expenses
+    .map((c) => ({
+      name: c.category,
+      value: Math.abs(Number(c.total)),
+    }));
 
   if (!ready) return <main style={{ padding: 24 }}>Loading...</main>;
 
   return (
     <main style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800 }}>
             {data?.account?.name ?? "Account"}
-            <button
-              onClick={deleteAccount}
-              style={{
-                padding: "10px 12px",
-                backgroundColor: "#e5484d",
-                color: "white",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
-            >
-              Delete Account
-            </button>
           </h1>
-
-          {data?.account ? (
+          {data?.account && (
             <div style={{ color: "#666", marginTop: 6 }}>
               {data.account.institution} • {data.account.account_type} • Balance: $
               {data.account.balance}
             </div>
-          ) : (
-            <div style={{ color: "#666", marginTop: 6 }}>
-              Account id: {accountId || "(missing)"}
-            </div>
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={deleteAccount}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#e5484d",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+            }}
+          >
+            Delete
+          </button>
+
           <a href="/dashboard">Back</a>
+
           <button
             onClick={() => {
               logout();
               window.location.href = "/login";
             }}
-            style={{ padding: "10px 12px" }}
           >
             Logout
           </button>
         </div>
       </div>
 
-      {/* Error */}
-      {err ? <p style={{ marginTop: 12, color: "crimson" }}>{err}</p> : null}
+      {err && <p style={{ color: "crimson" }}>{err}</p>}
+      {busy && <p>Loading…</p>}
 
-      {/* Loading */}
-      {busy && !data ? <p style={{ marginTop: 12 }}>Loading transactions…</p> : null}
-
-      {/* Content */}
-      {data ? (
-        <>
-          {/* Pagination */}
-          <div style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center" }}>
-            <button
-              disabled={offset === 0}
-              onClick={() => setOffset((o) => Math.max(0, o - limit))}
-              style={{ padding: "10px 12px" }}
-            >
-              Prev
-            </button>
-
-            <button
-              disabled={data.pagination.returned < limit}
-              onClick={() => setOffset((o) => o + limit)}
-              style={{ padding: "10px 12px" }}
-            >
-              Next
-            </button>
-
-            <span style={{ color: "#666" }}>
-              Showing {data.pagination.returned} (offset {offset})
-            </span>
-          </div>
-
-          {/* -------------------------------------------------
-    Filters
-------------------------------------------------- */}
-          <div
-            style={{
-              marginTop: 20,
-              padding: 16,
-              border: "1px solid #eee",
-              borderRadius: 8,
-              display: "grid",
-              gap: 12,
+      {/* Filters */}
+      <div
+        style={{
+          marginTop: 20,
+          padding: 16,
+          border: "1px solid #eee",
+          borderRadius: 8,
+        }}
+      >
+        <h3>Filters</h3>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <input
+            type="text"
+            placeholder="Search description..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <button
+            onClick={() => {
+              setOffset(0);
+              load();
+              loadCategorySummary();
             }}
           >
-            <h3 style={{ margin: 0 }}>Filters</h3>
+            Apply
+          </button>
+          <button
+            onClick={() => {
+              setStartDate("");
+              setEndDate("");
+              setSearchText("");
+              setOffset(0);
+              load();
+              loadCategorySummary();
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
 
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <label style={{ fontSize: 12 }}>Start Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+      {/* Category Chart */}
+      {chartData.length > 0 && (
+        <div
+          style={{
+            marginTop: 30,
+            padding: 20,
+            border: "1px solid #eee",
+            borderRadius: 10,
+          }}
+        >
+          <h3>Spending by Category</h3>
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={100}
+                  label
                 />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12 }}>End Date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12 }}>Search</label>
-                <input
-                  type="text"
-                  placeholder="Search description..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    setOffset(0); // reset pagination
-                    load();
-                  }}
-                  style={{ padding: "8px 12px" }}
-                >
-                  Apply
-                </button>
-
-                <button
-                  onClick={() => {
-                    setStartDate("");
-                    setEndDate("");
-                    setSearchText("");
-                    setOffset(0);
-                    load();
-                  }}
-                  style={{ padding: "8px 12px" }}
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
+        </div>
+      )}
 
-          <h2 style={{ marginTop: 18, fontSize: 18, fontWeight: 800 }}>
-            Transactions
-          </h2>
+      {/* Transactions */}
+      {data?.transactions?.length === 0 ? (
+        <p style={{ marginTop: 20 }}>No transactions found.</p>
+      ) : (
+        <ul style={{ marginTop: 20, display: "grid", gap: 10 }}>
+          {data?.transactions?.map((t) => {
+            const amount = Number(t.amount);
+            const isExpense = amount < 0;
 
-          {data.transactions.length === 0 ? (
-            <p style={{ marginTop: 10, color: "#666" }}>
-              No transactions found for this account.
-            </p>
-          ) : (
-            <ul style={{ marginTop: 10, display: "grid", gap: 10 }}>
-              {data.transactions.map((t) => (
-                <li
-                  key={t.id}
-                  style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ fontWeight: 800 }}>{t.description}</div>
-                    <div style={{ fontWeight: 800 }}>${t.amount}</div>
+            return (
+              <li
+                key={t.id}
+                style={{
+                  border: "1px solid #eee",
+                  borderRadius: 10,
+                  padding: 12,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ fontWeight: 700 }}>{t.description}</div>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: isExpense ? "#e5484d" : "#2e7d32",
+                    }}
+                  >
+                    ${t.amount}
                   </div>
+                </div>
 
-                  <div style={{ marginTop: 4, fontSize: 12, color: "#666" }}>
-                    {t.transaction_type}
-                    {t.created_at ? ` • ${new Date(t.created_at).toLocaleString()}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : null}
+                <div style={{ fontSize: 12, color: "#666" }}>
+                  {t.transaction_type}
+                  {t.created_at &&
+                    ` • ${new Date(t.created_at).toLocaleString()}`}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </main>
   );
 }
