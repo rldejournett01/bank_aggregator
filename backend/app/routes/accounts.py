@@ -84,6 +84,12 @@ def get_account_transactions(
     account_id: UUID,
     limit: int = 50,
     offset: int = 0,
+
+    # 🔹 NEW FILTER PARAMETERS
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
+
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -93,7 +99,10 @@ def get_account_transactions(
     Pagination:
     - limit: how many results to return
     - offset: how many results to skip
+    - start/end dates: support data filtering
+    - search for text search
     """
+
     # 1) Ensure the account belongs to the user (prevents data leaks)
     account = (
         db.query(BankAccount)
@@ -103,13 +112,29 @@ def get_account_transactions(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # 2) Query transactions for this account
+    # 2) Build base query for this account
+    query = db.query(Transaction).filter(
+        Transaction.account_id == account.id
+    )
+
+    # 🔹 Apply date filtering if provided
+    if start_date:
+        query = query.filter(Transaction.date >= start_date)
+
+    if end_date:
+        query = query.filter(Transaction.date <= end_date)
+
+    # 🔹 Apply text search (description)
+    if search:
+        query = query.filter(
+            Transaction.description.ilike(f"%{search}%")
+        )
+
+    # 🔹 Apply ordering + pagination
     txs = (
-        db.query(Transaction)
-        .filter(Transaction.account_id == account.id)
-        .order_by(desc(Transaction.created_at))
+        query.order_by(desc(Transaction.date))
         .offset(offset)
-        .limit(min(limit, 200))  # guardrail so nobody requests 50k at once
+        .limit(min(limit, 200))  # guardrail limit
         .all()
     )
 
@@ -136,3 +161,56 @@ def get_account_transactions(
         "pagination": {"limit": limit, "offset": offset, "returned": len(txs)},
     }
     
+
+# -------------------------------------------------
+# Category Spending Summary (per account)
+# -------------------------------------------------
+from sqlalchemy import func
+
+
+@router.get("/{account_id}/category-summary")
+def get_category_summary(
+    account_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns total transaction amounts grouped by category
+    for a specific account.
+
+    Used for analytics / spending breakdown.
+    """
+
+    # 1) Ensure account belongs to user
+    account = (
+        db.query(BankAccount)
+        .filter(
+            BankAccount.id == account_id,
+            BankAccount.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    # 2) Group transactions by category
+    rows = (
+        db.query(
+            Transaction.category,
+            func.sum(Transaction.amount).label("total")
+        )
+        .filter(Transaction.account_id == account.id)
+        .group_by(Transaction.category)
+        .order_by(func.sum(Transaction.amount))  # most negative (largest spend) first
+        .all()
+    )
+
+    # 3) Return clean JSON
+    return [
+        {
+            "category": r[0] or "Uncategorized",
+            "total": str(r[1])
+        }
+        for r in rows
+    ]
