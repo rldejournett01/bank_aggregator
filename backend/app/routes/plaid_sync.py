@@ -112,48 +112,57 @@ def sync_plaid(
             tx_resp = plaid_client.transactions_get(tx_req).to_dict()
             plaid_transactions = tx_resp.get("transactions", [])
 
+            # Insert transactions idempotently
             for pt in plaid_transactions:
+
                 plaid_tx_id = pt["transaction_id"]
-                description = pt.get("name") or "Transaction"
+                name = pt.get("name") or "Transaction"
+                amount = Decimal(str(pt.get("amount", 0)))
 
-                # Plaid usually returns positive values for outflows.
-                # We store outflows as negative for consistency.
-                raw_amount = Decimal(str(pt.get("amount", 0)))
-                amount = -abs(raw_amount)
+                # Plaid amounts:
+                # Positive = money leaving account
+                # We store outflow as negative for consistency
+                signed_amount = -amount
 
-                # Never allow None into a NOT NULL column
-                tx_type = pt.get("transaction_type") or pt.get("payment_channel") or "unknown"
+                # Determine transaction type
+                tx_type = "debit" if signed_amount < 0 else "credit"
 
-                # Idempotency: skip if already stored
+                # 🔹 NEW FIELDS EXTRACTION
+
+                # Date comes as ISO string (YYYY-MM-DD)
+                tx_date = pt.get("date")  # keep as string; SQLAlchemy Date handles it
+
+                # Merchant name (may be None)
+                merchant_name = pt.get("merchant_name")
+
+                # Category list example: ["Food and Drink", "Restaurants"]
+                category_list = pt.get("category") or []
+                category = category_list[0] if category_list else "Uncategorized"
+
+                # Pending status
+                pending = pt.get("pending", False)
+
+                # Idempotency check
                 exists = db.query(Transaction).filter(
                     Transaction.external_id == plaid_tx_id
                 ).first()
+
                 if exists:
                     continue
 
-                # ✅ Correct mapping: Plaid transaction references a Plaid account_id
-                plaid_account_id = pt.get("account_id")
-                if not plaid_account_id:
-                    continue
-
-                # Find the correct local BankAccount using plaid_account_id
-                account = db.query(BankAccount).filter(
-                    BankAccount.user_id == current_user.id,
-                    BankAccount.plaid_account_id == plaid_account_id
-                ).first()
-
-                # If account doesn't exist locally, skip to avoid orphaned transactions
-                # (This should be rare because we sync accounts first.)
-                if not account:
-                    continue
-
+                # 🔹 UPDATED INSERT
                 new_tx = Transaction(
                     account_id=account.id,
                     external_id=plaid_tx_id,
-                    amount=amount,
-                    description=description,
+                    amount=signed_amount,
+                    description=name,
                     transaction_type=tx_type,
+                    date=tx_date,
+                    merchant_name=merchant_name,
+                    category=category,
+                    pending=pending,
                 )
+
                 db.add(new_tx)
                 created_txs += 1
 
