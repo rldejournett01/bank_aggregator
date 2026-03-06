@@ -10,17 +10,35 @@ type Account = {
   name: string;
   institution: string;
   account_type: string;
+  account_class: "asset" | "liability";
+  type_label: string;
   balance: string;
 };
 
 type DashboardResponse = {
   total_balance: string;
+  net_worth: string;
+  total_assets: string;
+  total_liabilities: string;
   accounts: Account[];
 };
 
-function AccountTypeIcon({ type }: { type: string }) {
+function AccountTypeIcon({ type, accountClass }: { type: string; accountClass: string }) {
   const t = type?.toLowerCase();
-  if (t?.includes("invest") || t?.includes("brokerage")) {
+  if (accountClass === "liability") {
+    if (t?.includes("mortgage")) return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    );
+    // credit card / loan
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+    );
+  }
+  if (t?.includes("invest") || t?.includes("brokerage") || t?.includes("retirement")) {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
@@ -152,13 +170,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Total balance hero */}
+      {/* Net worth hero */}
       <div className="bg-white rounded-xl border border-[#c8dcc8] px-8 py-7">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-2">Total balance</p>
+            <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-2">Net Worth</p>
             <div className="text-5xl font-light text-[#0d1f0d] tracking-tight" style={{ fontFamily: "'DM Mono', monospace" }}>
-              ${Number(totalBalance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${Number(dash?.net_worth ?? dash?.total_balance ?? "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="mt-2 text-xs text-[#8aaa8a]">
               Across {accounts.length} account{accounts.length !== 1 ? "s" : ""}
@@ -177,6 +195,45 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* Assets vs Liabilities bar */}
+        {dash?.total_assets && (
+          <div className="mt-6 pt-6 border-t border-[#f0f7f0]">
+            <div className="grid grid-cols-2 gap-6 mb-4">
+              <div>
+                <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-1">Total Assets</p>
+                <p className="text-xl font-light text-[#1a7a1a] font-['DM_Mono',monospace]">
+                  +${Number(dash.total_assets).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-1">Total Liabilities</p>
+                <p className="text-xl font-light text-[#e5484d] font-['DM_Mono',monospace]">
+                  −${Number(dash.total_liabilities).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+            {/* Visual ratio bar */}
+            {(() => {
+              const assets = Number(dash.total_assets);
+              const liabilities = Number(dash.total_liabilities);
+              const total = assets + liabilities;
+              const assetPct = total > 0 ? (assets / total) * 100 : 100;
+              return (
+                <div className="h-2 rounded-full overflow-hidden bg-[#fde8e8] flex">
+                  <div
+                    className="h-full bg-[#1a7a1a] rounded-full transition-all duration-700"
+                    style={{ width: `${assetPct}%` }}
+                  />
+                </div>
+              );
+            })()}
+            <div className="flex justify-between mt-1">
+              <span className="text-[9px] tracking-widest uppercase text-[#1a7a1a]">Assets</span>
+              <span className="text-[9px] tracking-widest uppercase text-[#e5484d]">Liabilities</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Accounts */}
@@ -202,35 +259,55 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {accounts.map((a) => (
-              <Link
-                key={a.id}
-                href={`/accounts/${a.id}`}
-                className="group bg-white rounded-xl border border-[#c8dcc8] px-5 py-5 hover:border-[#1a7a1a] hover:shadow-sm transition-all duration-150"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-[#eaf4ea] flex items-center justify-center text-[#1a7a1a]">
-                    <AccountTypeIcon type={a.account_type} />
-                  </div>
-                  <svg
-                    className="w-4 h-4 text-[#b0c8b0] group-hover:text-[#1a7a1a] transition-colors"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-                <p className="text-sm font-semibold text-[#0d1f0d] mb-0.5">{a.name}</p>
-                <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-4">
-                  {a.institution} · {a.account_type}
-                </p>
-                <div
-                  className="text-2xl font-light text-[#0d1f0d]"
-                  style={{ fontFamily: "'DM Mono', monospace" }}
+            {accounts.map((a) => {
+              const isLiability = a.account_class === "liability";
+              return (
+                <Link
+                  key={a.id}
+                  href={`/accounts/${a.id}`}
+                  className={`group bg-white rounded-xl border px-5 py-5 hover:shadow-sm transition-all duration-150 ${isLiability
+                      ? "border-[#fca5a5] hover:border-[#e5484d]"
+                      : "border-[#c8dcc8] hover:border-[#1a7a1a]"
+                    }`}
                 >
-                  ${Number(a.balance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              </Link>
-            ))}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isLiability ? "bg-[#fef2f2] text-[#e5484d]" : "bg-[#eaf4ea] text-[#1a7a1a]"
+                      }`}>
+                      <AccountTypeIcon type={a.account_type} accountClass={a.account_class} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] tracking-widest uppercase font-semibold px-2 py-0.5 rounded-full ${isLiability
+                          ? "text-[#e5484d] bg-[#fef2f2]"
+                          : "text-[#1a7a1a] bg-[#eaf4ea]"
+                        }`}>
+                        {isLiability ? "Liability" : "Asset"}
+                      </span>
+                      <svg
+                        className={`w-4 h-4 transition-colors ${isLiability
+                            ? "text-[#fca5a5] group-hover:text-[#e5484d]"
+                            : "text-[#b0c8b0] group-hover:text-[#1a7a1a]"
+                          }`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-[#0d1f0d] mb-0.5">{a.name}</p>
+                  <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-4">
+                    {a.institution} · {a.type_label || a.account_type}
+                  </p>
+                  <div className="flex items-end justify-between">
+                    <div
+                      className={`text-2xl font-light ${isLiability ? "text-[#e5484d]" : "text-[#0d1f0d]"}`}
+                      style={{ fontFamily: "'DM Mono', monospace" }}
+                    >
+                      {isLiability ? "−" : ""}${Number(a.balance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

@@ -64,10 +64,22 @@ def sync_plaid(
                 # Plaid's stable account id (this is what transactions reference)
                 plaid_account_id = pa["account_id"]
 
-                name = pa.get("name") or "Account"
+                raw_name = pa.get("name") or ""
                 subtype = pa.get("subtype") or pa.get("type") or "unknown"
-
                 institution_name = item.institution_name or "Linked Institution"
+                mask = pa.get("mask")  # last 4 digits, e.g. "4821" — may be None
+
+                # Plaid sandbox returns generic names like "Plaid Checking" / "Plaid Credit Card".
+                # Build a proper display name from the institution + subtype instead.
+                PLAID_GENERIC_PREFIXES = ("plaid ", "plaid_")
+                is_generic = any(raw_name.lower().startswith(p) for p in PLAID_GENERIC_PREFIXES)
+                if is_generic:
+                    base_name = f"{institution_name} {subtype.replace('_', ' ').title()}"
+                else:
+                    base_name = raw_name or f"{institution_name} {subtype.title()}"
+
+                # Append last 4 to disambiguate duplicate account names
+                name = f"{base_name} ••{mask}" if mask else base_name
 
                 # Plaid balance object may omit current
                 current_balance = pa.get("balances", {}).get("current")

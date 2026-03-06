@@ -31,6 +31,15 @@ export default function AppLayout({
                 </svg>
             ),
         },
+        {
+            href: "/analysis",
+            label: "Analysis",
+            icon: (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+            ),
+        },
     ];
 
     return (
@@ -62,8 +71,8 @@ export default function AppLayout({
                                 key={link.href}
                                 href={link.href}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded text-xs font-medium transition-colors duration-150 ${active
-                                        ? "bg-[#eaf4ea] text-[#1a7a1a]"
-                                        : "text-[#4a7a4a] hover:bg-[#f0f7f0] hover:text-[#0d1f0d]"
+                                    ? "bg-[#eaf4ea] text-[#1a7a1a]"
+                                    : "text-[#4a7a4a] hover:bg-[#f0f7f0] hover:text-[#0d1f0d]"
                                     }`}
                             >
                                 <span className={active ? "text-[#1a7a1a]" : "text-[#8aaa8a]"}>
