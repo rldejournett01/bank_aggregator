@@ -155,6 +155,8 @@ http://localhost:3000
 Backend runs at:
 
 http://localhost:8000
+
+```
 📌 Engineering Principles
 
 Secure by default
