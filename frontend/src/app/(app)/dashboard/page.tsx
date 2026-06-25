@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 type Account = {
   id: string;
@@ -21,6 +24,13 @@ type DashboardResponse = {
   total_assets: string;
   total_liabilities: string;
   accounts: Account[];
+};
+
+type HistoryPoint = {
+  date: string;
+  net_worth: number;
+  total_assets: number;
+  total_liabilities: number;
 };
 
 function AccountTypeIcon({ type, accountClass }: { type: string; accountClass: string }) {
@@ -60,24 +70,28 @@ function AccountTypeIcon({ type, accountClass }: { type: string; accountClass: s
 }
 
 export default function DashboardPage() {
-  const { token, ready, logout } = useAuth();
+  const { authed, ready, logout } = useAuth();
   const [me, setMe] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
   const [dash, setDash] = useState<DashboardResponse | null>(null);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [syncMsg, setSyncMsg] = useState("");
 
-  async function loadDashboard(t: string) {
-    const d = await apiFetch<DashboardResponse>("/dashboard/", { token: t });
+  async function loadDashboard() {
+    const [d, h] = await Promise.all([
+      apiFetch<DashboardResponse>("/dashboard/"),
+      apiFetch<HistoryPoint[]>("/dashboard/history?days=90").catch(() => [] as HistoryPoint[]),
+    ]);
     setDash(d);
+    setHistory(h);
   }
 
   async function syncNow() {
-    if (!token) return;
     setSyncStatus("syncing");
     try {
-      await apiFetch("/plaid/sync", { method: "POST", token });
-      await loadDashboard(token);
+      await apiFetch("/plaid/sync", { method: "POST" });
+      await loadDashboard();
       setSyncStatus("done");
       setSyncMsg("Synced successfully");
     } catch (e: any) {
@@ -88,18 +102,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!ready) return;
-    if (!token) { window.location.href = "/login"; return; }
+    if (!authed) { window.location.href = "/login"; return; }
 
-    apiFetch("/users/me", { token }).then(setMe).catch((e) => {
+    apiFetch("/users/me").then(setMe).catch((e) => {
       setErr(e.message ?? "Failed to load user");
       logout();
       window.location.href = "/login";
     });
 
-    loadDashboard(token).catch((e) => {
+    loadDashboard().catch((e) => {
       setErr(e.message ?? "Failed to load dashboard");
     });
-  }, [ready, token, logout]);
+  }, [ready, authed, logout]);
 
   if (!ready) {
     return (
@@ -182,19 +196,62 @@ export default function DashboardPage() {
               Across {accounts.length} account{accounts.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="hidden sm:flex items-end gap-1 h-16 opacity-60">
-            {[50, 65, 55, 70, 60, 80, 72, 88, 76, 95].map((h, i) => (
-              <div
-                key={i}
-                className="w-2 rounded-sm"
-                style={{
-                  height: `${h}%`,
-                  background: i === 9 ? "#1a7a1a" : `rgba(26,122,26,${0.12 + i * 0.08})`,
-                }}
-              />
-            ))}
-          </div>
+          {history.length >= 2 && (
+            <div className="hidden sm:block w-48 h-16">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="nwSpark" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1a7a1a" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#1a7a1a" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="net_worth" stroke="#1a7a1a" strokeWidth={2} fill="url(#nwSpark)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
+
+        {/* Net worth trend */}
+        {history.length >= 2 && (
+          <div className="mt-6 pt-6 border-t border-[#f0f7f0]">
+            <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-4">Net worth · last 90 days</p>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                  <defs>
+                    <linearGradient id="nwTrend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#1a7a1a" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#1a7a1a" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 9, fill: "#8aaa8a" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    minTickGap={32}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: "#8aaa8a" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={48}
+                    tickFormatter={(n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${n.toFixed(0)}`)}
+                  />
+                  <Tooltip
+                    formatter={(v) => [`$${Number(v ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, "Net worth"]}
+                    labelFormatter={(d) => new Date(d as string).toLocaleDateString()}
+                    contentStyle={{ border: "1px solid #c8dcc8", borderRadius: 8, fontSize: 12 }}
+                  />
+                  <Area type="monotone" dataKey="net_worth" stroke="#1a7a1a" strokeWidth={2} fill="url(#nwTrend)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Assets vs Liabilities bar */}
         {dash?.total_assets && (

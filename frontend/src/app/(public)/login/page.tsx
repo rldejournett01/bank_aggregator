@@ -5,10 +5,8 @@ import Link from "next/link";
 import { apiForm } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type TokenResponse = { access_token: string; token_type: string };
-
 export default function LoginPage() {
-  const { setToken } = useAuth();
+  const { setAuthed } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -19,11 +17,12 @@ export default function LoginPage() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await apiForm<TokenResponse>("/auth/login", {
+      // Sets httpOnly access + refresh cookies on the response.
+      await apiForm<{ status: string }>("/auth/login", {
         username: email,
         password: password,
       });
-      setToken(res.access_token);
+      setAuthed(true);
       window.location.href = "/dashboard";
     } catch (err: any) {
       setMsg(err.message ?? "Login failed");

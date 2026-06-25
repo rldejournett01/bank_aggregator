@@ -112,7 +112,7 @@ function SurplusGauge({ surplus, income }: { surplus: number; income: number }) 
     );
 }
 
-function PremiumGate({ feature }: { feature: string }) {
+function PremiumGate({ feature, onUpgrade }: { feature: string; onUpgrade?: () => void }) {
     return (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl"
             style={{ background: "rgba(247,250,247,0.85)", backdropFilter: "blur(6px)" }}>
@@ -124,7 +124,10 @@ function PremiumGate({ feature }: { feature: string }) {
                 </div>
                 <p className="text-sm font-semibold text-[#0d1f0d] mb-1">{feature}</p>
                 <p className="text-xs text-[#4a7a4a] mb-4">Upgrade to Cashism Premium to unlock this insight.</p>
-                <button className="px-5 py-2 bg-[#1a7a1a] text-white text-xs font-semibold tracking-widest uppercase rounded hover:bg-[#155e15] transition-colors">
+                <button
+                    onClick={onUpgrade}
+                    className="px-5 py-2 bg-[#1a7a1a] text-white text-xs font-semibold tracking-widest uppercase rounded hover:bg-[#155e15] transition-colors"
+                >
                     Upgrade →
                 </button>
             </div>
@@ -175,7 +178,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AnalysisPage() {
-    const { token, ready } = useAuth();
+    const { authed, ready } = useAuth();
 
     const [bills, setBills] = useState<BillsData | null>(null);
     const [liquidity, setLiquidity] = useState<LiquidityData | null>(null);
@@ -190,27 +193,27 @@ export default function AnalysisPage() {
 
     useEffect(() => {
         if (!ready) return;
-        if (!token) { window.location.href = "/login"; return; }
+        if (!authed) { window.location.href = "/login"; return; }
 
         async function load() {
             setLoading(true);
             try {
                 const [b, l] = await Promise.all([
-                    apiFetch<BillsData>("/analysis/bills", { token }),
-                    apiFetch<LiquidityData>("/analysis/liquidity", { token }),
+                    apiFetch<BillsData>("/analysis/bills"),
+                    apiFetch<LiquidityData>("/analysis/liquidity"),
                 ]);
                 setBills(b);
                 setLiquidity(l);
 
-                // Read premium status from the already-fetched user profile
-                const meData = await apiFetch<{ is_premium: boolean }>("/users/me", { token });
+                // Read premium status from the user profile
+                const meData = await apiFetch<{ is_premium: boolean }>("/users/me");
                 setIsPremium(meData.is_premium);
 
                 if (meData.is_premium) {
                     const [d, p, f] = await Promise.all([
-                        apiFetch<DebtData>("/analysis/debt", { token }),
-                        apiFetch<ProfitData>("/analysis/profitability", { token }),
-                        apiFetch<ForecastData>("/analysis/forecast", { token }),
+                        apiFetch<DebtData>("/analysis/debt"),
+                        apiFetch<ProfitData>("/analysis/profitability"),
+                        apiFetch<ForecastData>("/analysis/forecast"),
                     ]);
                     setDebt(d);
                     setProfit(p);
@@ -223,7 +226,34 @@ export default function AnalysisPage() {
             }
         }
         load();
-    }, [ready, token, isPremium]);
+    }, [ready, authed]);
+
+    // Handle return from Stripe Checkout: confirm the session, then refresh.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("checkout") !== "success") return;
+        const sid = params.get("session_id");
+        const finish = () => {
+            window.history.replaceState({}, "", "/analysis");
+            window.location.reload();
+        };
+        if (sid) {
+            apiFetch(`/billing/verify?session_id=${encodeURIComponent(sid)}`, { method: "POST" })
+                .catch(() => {})
+                .finally(finish);
+        } else {
+            finish();
+        }
+    }, []);
+
+    async function upgrade() {
+        try {
+            const res = await apiFetch<{ url: string }>("/billing/checkout", { method: "POST" });
+            window.location.href = res.url;
+        } catch (e: any) {
+            alert(e.message ?? "Upgrade is currently unavailable.");
+        }
+    }
 
     if (!ready || loading) {
         return (
@@ -420,7 +450,7 @@ export default function AnalysisPage() {
 
                     {/* Debt Management */}
                     <div className="relative bg-white rounded-xl border border-[#c8dcc8] px-8 py-7 overflow-hidden">
-                        {!isPremium && <PremiumGate feature="Debt Management" />}
+                        {!isPremium && <PremiumGate feature="Debt Management" onUpgrade={upgrade} />}
                         <SectionHeader label="Premium · Obligations" title="Debt Management" free={false} />
                         {debt ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -478,7 +508,7 @@ export default function AnalysisPage() {
 
                     {/* Profitability & Growth */}
                     <div className="relative bg-white rounded-xl border border-[#c8dcc8] px-8 py-7 overflow-hidden">
-                        {!isPremium && <PremiumGate feature="Profitability & Growth" />}
+                        {!isPremium && <PremiumGate feature="Profitability & Growth" onUpgrade={upgrade} />}
                         <SectionHeader label="Premium · Trajectory" title="Profitability & Growth" free={false} />
                         {profit ? (
                             <div className="space-y-6">
@@ -543,7 +573,7 @@ export default function AnalysisPage() {
             {activeTab === "forecast" && (
                 <div className="space-y-6">
                     <div className="relative bg-white rounded-xl border border-[#c8dcc8] px-8 py-7 overflow-hidden">
-                        {!isPremium && <PremiumGate feature="Financial Forecast" />}
+                        {!isPremium && <PremiumGate feature="Financial Forecast" onUpgrade={upgrade} />}
                         <SectionHeader label="Premium · Projection" title="Where will you be?" free={false} />
 
                         {forecast ? (

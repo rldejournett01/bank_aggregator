@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export default function SignupPage() {
+  const { setAuthed } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -16,11 +18,14 @@ export default function SignupPage() {
     setBusy(true);
     setMsg(null);
     try {
+      // Signup logs the user straight in (sets auth cookies).
       await apiFetch<{ message: string }>("/auth/signup", {
         method: "POST",
         body: { email, password },
       });
+      setAuthed(true);
       setSuccess(true);
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setMsg(err.message ?? "Signup failed");
     } finally {

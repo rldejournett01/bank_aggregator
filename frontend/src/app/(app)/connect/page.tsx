@@ -13,29 +13,29 @@ type LinkedItem = {
   item_id: string;
   institution_name?: string | null;
   institution_id?: string | null;
+  last_synced_at?: string | null;
   created_at?: string;
 };
 
 export default function ConnectPage() {
-  const { token, ready } = useAuth();
+  const { authed, ready } = useAuth();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [statusMsg, setStatusMsg] = useState("");
   const [linked, setLinked] = useState<LinkedItem[]>([]);
 
   async function loadLinked() {
-    if (!token) return;
-    const items = await apiFetch<LinkedItem[]>("/plaid/linked", { token });
+    const items = await apiFetch<LinkedItem[]>("/plaid/linked");
     setLinked(items);
   }
 
   useEffect(() => {
     if (!ready) return;
-    if (!token) { window.location.href = "/login"; return; }
+    if (!authed) { window.location.href = "/login"; return; }
 
     (async () => {
       setStatus("loading");
-      const res = await apiFetch<LinkTokenResponse>("/plaid/link-token", { method: "POST", token });
+      const res = await apiFetch<LinkTokenResponse>("/plaid/link-token", { method: "POST" });
       setLinkToken(res.link_token);
       setStatus("idle");
       await loadLinked();
@@ -43,11 +43,10 @@ export default function ConnectPage() {
       setStatus("error");
       setStatusMsg(e.message ?? "Failed to create link token");
     });
-  }, [ready, token]);
+  }, [ready, authed]);
 
   const onSuccess = useMemo(
     () => async (public_token: string, metadata: any) => {
-      if (!token) return;
       const institution_id = metadata?.institution?.institution_id ?? null;
       const institution_name = metadata?.institution?.name ?? null;
       setStatus("loading");
@@ -55,7 +54,6 @@ export default function ConnectPage() {
       try {
         await apiFetch("/plaid/exchange", {
           method: "POST",
-          token,
           body: { public_token, institution_id, institution_name },
         });
         setStatus("success");
@@ -66,7 +64,7 @@ export default function ConnectPage() {
         setStatusMsg(e.message ?? "Connection failed");
       }
     },
-    [token]
+    []
   );
 
   const { open, ready: plaidReady } = usePlaidLink({
@@ -179,7 +177,9 @@ export default function ConnectPage() {
                     {x.institution_name ?? "Institution"}
                   </p>
                   <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mt-0.5 truncate">
-                    ID: {x.item_id}
+                    {x.last_synced_at
+                      ? `Last synced ${new Date(x.last_synced_at).toLocaleString()}`
+                      : "Not synced yet"}
                   </p>
                 </div>
                 {x.created_at && (
