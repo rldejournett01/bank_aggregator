@@ -136,12 +136,49 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 
 
-Create a .env file:
+Create a backend/.env file:
+
+```bash
+# Required
+SECRET_KEY=your_jwt_secret
+FERNET_KEY=your_fernet_key            # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 PLAID_CLIENT_ID=your_id
 PLAID_SECRET=your_secret
-PLAID_ENV=sandbox
-DATABASE_URL=postgresql://...
-SECRET_KEY=your_jwt_secret
+PLAID_ENV=sandbox                     # sandbox | development | production
+DATABASE_URL=postgresql://localhost/bank_aggregator
+
+# Optional — auth cookies (production)
+COOKIE_SECURE=true                    # true behind HTTPS
+COOKIE_SAMESITE=lax                   # use "none" for cross-site frontends (requires COOKIE_SECURE)
+FRONTEND_URL=http://localhost:3000
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Optional — Plaid webhooks (auto-sync on new transactions)
+PLAID_WEBHOOK_URL=https://your-host/plaid/webhook
+
+# Optional — Stripe billing (Premium upgrade). If unset, upgrade is disabled.
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID=price_...             # a recurring subscription price
+
+# Optional — AI advisor (premium feature). If unset, advisor is disabled.
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-opus-4-8
+```
+
+Run database migrations after installing:
+
+```bash
+alembic upgrade head
+```
+
+Run the tests:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 2️⃣ Frontend
 cd frontend
