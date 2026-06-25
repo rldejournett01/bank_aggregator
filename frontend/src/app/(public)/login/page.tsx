@@ -118,7 +118,7 @@ export default function LoginPage() {
       <div className="px-8 py-4 border-t border-[#d4e8d4] flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-[#1a7a1a]" />
         <span className="text-[10px] tracking-widest uppercase text-[#8aaa8a]">
-          256-bit encrypted · SOC 2 compliant
+          Encrypted in transit · Bank credentials never stored — secured by Plaid
         </span>
       </div>
 
