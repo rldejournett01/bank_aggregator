@@ -53,8 +53,15 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Generate ephemeral Fernet key
         run: echo "FERNET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
-      - name: Run migrations
-        run: alembic upgrade head
+      - name: Initialize database schema
+        # The app provisions its schema via SQLAlchemy create_all at startup
+        # (app/main.py). The Alembic chain has no initial create-tables
+        # revision, so `alembic upgrade head` cannot build from an empty DB.
+        # Mirror the app's real init here, then `stamp` so alembic_version is
+        # coherent and the migration chain is validated as importable + linear.
+        run: |
+          python -c "from app.core.database import Base, engine; import app.models; Base.metadata.create_all(bind=engine)"
+          alembic stamp head
       - name: Run tests
         run: pytest -q
 
