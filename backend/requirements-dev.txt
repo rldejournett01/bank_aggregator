@@ -2,3 +2,8 @@
 -r requirements.txt
 pytest==8.3.4
 httpx==0.28.1
+
+# Security / lint tooling (mirrors CI)
+bandit[sarif]==1.9.4
+pip-audit==2.10.1
+ruff==0.15.19
