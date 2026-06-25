@@ -11,6 +11,7 @@ from plaid.model.products import Products
 from plaid.model.country_code import CountryCode
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 
+from app.core.config import settings
 from app.core.security import get_current_user
 from app.integrations.plaid_client import plaid_client
 from app.models.user import User
@@ -34,17 +35,20 @@ def create_link_token(
     Plaid Link then returns a public_token, which we exchange server-side.
     """
     try:
-        request = LinkTokenCreateRequest(
+        kwargs = dict(
             products=[Products("transactions")],
-            client_name="Bank Aggregator",
+            client_name="Cashism",
             country_codes=[CountryCode("US")],
             language="en",
             user=LinkTokenCreateRequestUser(
                 client_user_id=str(current_user.id)
             ),
         )
+        # Register the webhook so Plaid pushes transaction updates to us.
+        if settings.PLAID_WEBHOOK_URL:
+            kwargs["webhook"] = settings.PLAID_WEBHOOK_URL
 
-        response = plaid_client.link_token_create(request)
+        response = plaid_client.link_token_create(LinkTokenCreateRequest(**kwargs))
         return response.to_dict()
 
     except Exception as e:
