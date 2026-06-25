@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.2.1",
-    "next": "16.1.6",
+    "next": "16.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-plaid-link": "^4.1.1",
