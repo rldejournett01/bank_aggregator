@@ -3,6 +3,7 @@ from sqlalchemy import Column, String, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, timezone
 from app.core.database import Base
+from sqlalchemy import Boolean
 
 class User(Base):
     __tablename__ = "users"
@@ -11,5 +12,11 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    is_premium = Column(Boolean, default=False)
+
+    # Stripe billing linkage
+    stripe_customer_id = Column(String, index=True, nullable=True)
+    stripe_subscription_id = Column(String, index=True, nullable=True)
+
 
     

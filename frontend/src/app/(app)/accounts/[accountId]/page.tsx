@@ -55,7 +55,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function AccountDetailPage() {
-  const { token, ready, logout } = useAuth();
+  const { authed, ready } = useAuth();
   const params = useParams();
 
   const accountId = useMemo(() => {
@@ -78,7 +78,7 @@ export default function AccountDetailPage() {
   const [offset, setOffset] = useState(0);
 
   async function load() {
-    if (!token || !hasValidAccountId) return;
+    if (!hasValidAccountId) return;
     setBusy(true);
     setErr(null);
     try {
@@ -87,8 +87,7 @@ export default function AccountDetailPage() {
       if (endDate) p.append("end_date", endDate);
       if (searchText) p.append("search", searchText);
       const res = await apiFetch<AccountTxResponse>(
-        `/accounts/${accountId}/transactions?${p.toString()}`,
-        { token }
+        `/accounts/${accountId}/transactions?${p.toString()}`
       );
       setData(res);
     } catch (e: any) {
@@ -99,11 +98,10 @@ export default function AccountDetailPage() {
   }
 
   async function loadCategorySummary() {
-    if (!token || !hasValidAccountId) return;
+    if (!hasValidAccountId) return;
     try {
       const res = await apiFetch<{ category: string; total: string }[]>(
-        `/accounts/${accountId}/category-summary`,
-        { token }
+        `/accounts/${accountId}/category-summary`
       );
       setCategoryData(res);
     } catch (e) {
@@ -112,10 +110,10 @@ export default function AccountDetailPage() {
   }
 
   async function deleteAccount() {
-    if (!token || !accountId) return;
+    if (!accountId) return;
     if (!window.confirm("Permanently delete this account and all its transactions?")) return;
     try {
-      await apiFetch(`/accounts/${accountId}`, { method: "DELETE", token });
+      await apiFetch(`/accounts/${accountId}`, { method: "DELETE" });
       window.location.href = "/dashboard";
     } catch (e: any) {
       alert(e.message ?? "Failed to delete account");
@@ -124,11 +122,11 @@ export default function AccountDetailPage() {
 
   useEffect(() => {
     if (!ready) return;
-    if (!token) { window.location.href = "/login"; return; }
+    if (!authed) { window.location.href = "/login"; return; }
     if (!hasValidAccountId) { setErr("Invalid account id."); return; }
     load();
     loadCategorySummary();
-  }, [ready, token, accountId, offset]);
+  }, [ready, authed, accountId, offset]);
 
   const chartData = categoryData
     .filter((c) => Number(c.total) < 0)
