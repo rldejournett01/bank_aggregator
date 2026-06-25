@@ -19,4 +19,12 @@ class LinkedAccount(Base):
     institution_id = Column(String, index=True, nullable=True)
     institution_name = Column(String, nullable=True)
 
+    # Plaid /transactions/sync incremental cursor (null until first sync).
+    # Persisting this lets us pull only the delta on each sync instead of
+    # re-fetching a fixed date window every time.
+    plaid_cursor = Column(String, nullable=True)
+
+    # When this item last completed a successful sync (shown in the UI).
+    last_synced_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

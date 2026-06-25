@@ -14,5 +14,9 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     is_premium = Column(Boolean, default=False)
 
+    # Stripe billing linkage
+    stripe_customer_id = Column(String, index=True, nullable=True)
+    stripe_subscription_id = Column(String, index=True, nullable=True)
+
 
     
