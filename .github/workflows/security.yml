@@ -61,7 +61,12 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+      # Advisory: surfaces risky new deps in the PR. Requires the repo's
+      # Dependency Graph (now enabled); kept non-blocking so graph-indexing
+      # latency can't red the pipeline. pip-audit/npm audit + Dependabot also
+      # cover dependency risk.
       - uses: actions/dependency-review-action@v4
+        continue-on-error: true
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
