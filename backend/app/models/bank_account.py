@@ -19,6 +19,10 @@ class BankAccount(Base):
     # Plaid stable account id (transactions reference this)
     plaid_account_id = Column(String, unique=True, index=True, nullable=True)
 
+    # Plaid item id of the institution link this account came from. Lets us
+    # disconnect a single institution and remove exactly its accounts.
+    item_id = Column(String, index=True, nullable=True)
+
     # Display fields
     name = Column(String, nullable=False)
     institution = Column(String, nullable=False)
