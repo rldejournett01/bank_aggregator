@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError
 
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, ChangePassword
 from app.core.security import (
     hash_password,
     verify_password,
@@ -15,6 +15,7 @@ from app.core.security import (
     decode_token,
     set_auth_cookies,
     clear_auth_cookies,
+    get_current_user,
     REFRESH_COOKIE,
 )
 from app.core.deps import get_db
@@ -134,3 +135,46 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
             pass
     clear_auth_cookies(response)
     return {"status": "logged_out"}
+
+
+@router.post("/logout-all")
+def logout_all(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Revoke every refresh token for the user — signs out all devices."""
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id
+    ).update({"revoked": True})
+    db.commit()
+    clear_auth_cookies(response)
+    return {"status": "logged_out_all"}
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePassword,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Change password after verifying the current one, then revoke all existing
+    refresh tokens (sign out other sessions) and issue a fresh session here.
+    """
+    if not verify_password(body.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 8 characters"
+        )
+
+    current_user.hashed_password = hash_password(body.new_password)
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id
+    ).update({"revoked": True})
+    db.commit()
+
+    _issue_session(response, db, current_user)  # keep this client logged in
+    return {"status": "password_changed"}

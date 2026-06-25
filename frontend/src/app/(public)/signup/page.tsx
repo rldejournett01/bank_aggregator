@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,9 +115,25 @@ export default function SignupPage() {
                   </div>
                 )}
 
+                <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    className="mt-0.5 accent-[#1a7a1a]"
+                  />
+                  <span className="text-[11px] text-[#4a7a4a] leading-relaxed">
+                    I am at least 18 years old and agree to the{" "}
+                    <a href="/terms" target="_blank" className="text-[#1a7a1a] font-semibold hover:underline">Terms of Service</a>{" "}
+                    and{" "}
+                    <a href="/privacy" target="_blank" className="text-[#1a7a1a] font-semibold hover:underline">Privacy Policy</a>,
+                    and I consent to connecting my financial accounts via Plaid for a read-only consolidated view.
+                  </span>
+                </label>
+
                 <button
                   onClick={submit}
-                  disabled={busy}
+                  disabled={busy || !agreed}
                   className="w-full py-3 bg-[#1a7a1a] text-white text-xs font-semibold tracking-widest uppercase rounded hover:bg-[#155e15] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 mt-2"
                 >
                   {busy ? "Creating account..." : "Create account →"}
@@ -142,7 +159,7 @@ export default function SignupPage() {
       <div className="px-8 py-4 border-t border-[#d4e8d4] flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-[#1a7a1a]" />
         <span className="text-[10px] tracking-widest uppercase text-[#8aaa8a]">
-          256-bit encrypted · SOC 2 compliant
+          Encrypted in transit · Bank credentials never stored — secured by Plaid
         </span>
       </div>
 

@@ -106,6 +106,7 @@ def _sync_single_item(db: Session, user_id, item: LinkedAccount) -> dict:
             account = BankAccount(
                 user_id=user_id,
                 plaid_account_id=plaid_account_id,
+                item_id=item.item_id,
                 name=name,
                 institution=institution_name,
                 account_type=subtype,
@@ -115,6 +116,7 @@ def _sync_single_item(db: Session, user_id, item: LinkedAccount) -> dict:
             db.flush()  # assign account.id for the lookup map
             counts["accounts_created"] += 1
         else:
+            account.item_id = item.item_id
             account.name = name
             account.institution = institution_name
             account.account_type = subtype

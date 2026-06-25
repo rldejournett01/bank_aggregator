@@ -2,14 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
-from app.core.crypto import encrypt_text
+from app.core.crypto import encrypt_text, decrypt_text
 from app.models.linked_account import LinkedAccount
+from app.models.bank_account import BankAccount
+from app.models.transaction import Transaction
 
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 from plaid.model.products import Products
 from plaid.model.country_code import CountryCode
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
+from plaid.model.item_remove_request import ItemRemoveRequest
 
 from app.core.config import settings
 from app.core.security import get_current_user
@@ -152,3 +155,55 @@ def list_linked_accounts(
         .order_by(LinkedAccount.created_at.desc())
         .all()
     )
+
+
+# -------------------------------------------------
+# Disconnect a linked institution (user's right to revoke access)
+# -------------------------------------------------
+@router.delete("/linked/{item_id}")
+def disconnect_institution(
+    item_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Disconnect one institution: tell Plaid to remove the item (stops further
+    data access and billing), then delete that item's accounts + transactions
+    and the link record. Local data is removed even if the Plaid call fails,
+    so the user's disconnect request always takes effect.
+    """
+    item = (
+        db.query(LinkedAccount)
+        .filter(
+            LinkedAccount.item_id == item_id,
+            LinkedAccount.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Linked institution not found")
+
+    # Best-effort: revoke at Plaid so they stop refreshing / billing this item.
+    try:
+        plaid_client.item_remove(
+            ItemRemoveRequest(access_token=decrypt_text(item.access_token))
+        )
+    except Exception:
+        pass
+
+    # Remove this institution's accounts (cascade deletes their transactions).
+    accounts = (
+        db.query(BankAccount)
+        .filter(
+            BankAccount.user_id == current_user.id,
+            BankAccount.item_id == item_id,
+        )
+        .all()
+    )
+    removed_accounts = len(accounts)
+    for acct in accounts:
+        db.delete(acct)  # cascade delete-orphan removes its transactions
+    db.delete(item)
+    db.commit()
+
+    return {"status": "disconnected", "item_id": item_id, "accounts_removed": removed_accounts}

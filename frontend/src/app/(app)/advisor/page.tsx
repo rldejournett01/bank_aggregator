@@ -204,6 +204,10 @@ export default function AdvisorPage() {
           Send
         </button>
       </form>
+
+      <p className="text-[10px] text-[#8aaa8a] text-center">
+        Informational only — not financial, investment, tax, or legal advice. Responses are AI-generated and may be inaccurate.
+      </p>
     </div>
   );
 }
