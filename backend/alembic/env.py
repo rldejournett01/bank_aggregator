@@ -19,7 +19,13 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from app.core.database import Base
+from app.core.config import settings
 from app.models import *  # ensures models are registered
+
+# Use the application's env-driven DATABASE_URL instead of the static
+# sqlalchemy.url in alembic.ini, so migrations always target the same database
+# as the app (CI, staging, prod). Escape % for ConfigParser interpolation.
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
