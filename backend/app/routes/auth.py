@@ -1,56 +1,136 @@
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
+import uuid
+from datetime import datetime, timezone
 
-from app.schemas.user import UserCreate, UserLogin, Token
-from app.core.security import hash_password, verify_password,create_access_token
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from jose import JWTError
+
+from app.schemas.user import UserCreate
+from app.core.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    set_auth_cookies,
+    clear_auth_cookies,
+    REFRESH_COOKIE,
+)
 from app.core.deps import get_db
 from app.models.user import User
+from app.models.refresh_token import RefreshToken
 
 
-#Router
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-#Sign Up Route with dependency injection
-@router.post("/signup")
-def signup(user: UserCreate, db: Session = Depends(get_db)):
+def _issue_session(response: Response, db: Session, user: User) -> None:
+    """Create a refresh-token row and set both auth cookies on the response."""
+    jti = uuid.uuid4()
+    refresh_token, expires_at = create_refresh_token({"sub": str(user.id)}, str(jti))
+    db.add(RefreshToken(id=jti, user_id=user.id, expires_at=expires_at, revoked=False))
+    db.commit()
 
-    #Check if existing
-    #Sends query to User database and filters for exact email, returns first result
+    access_token = create_access_token({"sub": str(user.id)})
+    set_auth_cookies(response, access_token, refresh_token)
+
+
+@router.post("/signup")
+def signup(user: UserCreate, response: Response, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
-    
-    #create new User
-    new_user = User(
-        email=user.email,
-        hashed_password=hash_password(user.password)
-    )
 
+    new_user = User(email=user.email, hashed_password=hash_password(user.password))
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return {"message": "User created successfully"}
+    # Log the user straight in after signup.
+    _issue_session(response, db, new_user)
+    return {"message": "User created successfully", "id": str(new_user.id)}
 
-from fastapi.security import OAuth2PasswordRequestForm
 
-#Login Route with dependency injection
-@router.post("/login", response_model=Token)
+@router.post("/login")
 def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), 
-    db: Session = Depends(get_db)):
-
-    #send query to db to find the user, returns first result
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     db_user = db.query(User).filter(User.email == form_data.username).first()
-
-
-    if not db_user:
+    if not db_user or not verify_password(form_data.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    if not verify_password(form_data.password, db_user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    token = create_access_token({"sub": str(db_user.id)})
 
-    return {"access_token": token, "token_type": "bearer"}
+    _issue_session(response, db, db_user)
+    return {"status": "authenticated", "id": str(db_user.id)}
+
+
+@router.post("/refresh")
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Rotate the refresh token: validate the presented one, revoke it, and issue
+    a fresh access + refresh pair. Reuse of an already-revoked token revokes
+    the user's entire session family (theft detection).
+    """
+    token = request.cookies.get(REFRESH_COOKIE)
+    if not token:
+        raise HTTPException(status_code=401, detail="No refresh token")
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        jti = payload.get("jti")
+        user_id = payload.get("sub")
+    except JWTError:
+        clear_auth_cookies(response)
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    row = db.query(RefreshToken).filter(RefreshToken.id == jti).first()
+
+    # Reuse detection: a revoked token being replayed → nuke the family.
+    if row and row.revoked:
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == row.user_id
+        ).update({"revoked": True})
+        db.commit()
+        clear_auth_cookies(response)
+        raise HTTPException(status_code=401, detail="Refresh token reuse detected")
+
+    if (
+        not row
+        or str(row.user_id) != str(user_id)
+        or row.expires_at < datetime.now(timezone.utc)
+    ):
+        clear_auth_cookies(response)
+        raise HTTPException(status_code=401, detail="Refresh token invalid or expired")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        clear_auth_cookies(response)
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Rotate: revoke old, issue new.
+    row.revoked = True
+    db.commit()
+    _issue_session(response, db, user)
+    return {"status": "refreshed"}
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    token = request.cookies.get(REFRESH_COOKIE)
+    if token:
+        try:
+            payload = decode_token(token)
+            jti = payload.get("jti")
+            if jti:
+                db.query(RefreshToken).filter(
+                    RefreshToken.id == jti
+                ).update({"revoked": True})
+                db.commit()
+        except JWTError:
+            pass
+    clear_auth_cookies(response)
+    return {"status": "logged_out"}
