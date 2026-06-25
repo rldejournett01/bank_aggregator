@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+import re
+import statistics
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -30,6 +32,12 @@ from sqlalchemy.orm import Session
 # ── exact imports matching your project ───────────────────────────────────────
 from app.core.deps import get_db
 from app.core.security import get_current_user
+from app.core.finance import (
+    classify,
+    net_worth,
+    current_liabilities,
+    LIQUID_ACCOUNT_TYPES,
+)
 from app.models.user import User
 from app.models.bank_account import BankAccount
 from app.models.transaction import Transaction
@@ -69,10 +77,6 @@ INCOME_KEYWORDS = [
     "zelle credit", "deposit", "income",
 ]
 
-LIQUID_ACCOUNT_TYPES = {"checking", "savings", "depository", "money market", "cash"}
-DEBT_ACCOUNT_TYPES   = {"credit card", "credit", "loan", "mortgage", "student", "auto"}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -84,6 +88,87 @@ def _is_bill(description: str, merchant: str | None) -> bool:
 def _is_income(description: str, merchant: str | None) -> bool:
     text = f"{description} {merchant or ''}".lower()
     return any(k in text for k in INCOME_KEYWORDS)
+
+
+# ---- recurring-transaction detection --------------------------------------
+#
+# A merchant is treated as recurring when it appears in >= 2 distinct months
+# with reasonably consistent amounts, OR when it matches a known bill/income
+# keyword. This catches rent/utilities even with no keyword match, instead of
+# the old keyword-only approach.
+
+def _normalize_merchant(merchant: str | None, description: str | None) -> str:
+    base = (merchant or description or "").lower()
+    base = re.sub(r"\d+", " ", base)       # drop store ids / reference numbers
+    base = re.sub(r"[^a-z& ]", " ", base)  # drop punctuation
+    return re.sub(r"\s+", " ", base).strip()
+
+def _pretty_name(merchant: str | None, description: str | None) -> str:
+    return (merchant or description or "Unknown").strip().title()
+
+def _cadence_from_gap(gap_days: float | None) -> tuple[str, float]:
+    """(frequency_label, occurrences_per_month) inferred from the median gap."""
+    if gap_days is None:
+        return ("monthly", 1.0)
+    if gap_days <= 10:
+        return ("weekly", 52 / 12)
+    if gap_days <= 20:
+        return ("biweekly", 26 / 12)
+    if gap_days <= 45:
+        return ("monthly", 1.0)
+    if gap_days <= 100:
+        return ("quarterly", 1 / 3)
+    return ("yearly", 1 / 12)
+
+def _amounts_consistent(amounts: list[float]) -> bool:
+    if len(amounts) < 2:
+        return False
+    mean = statistics.fmean(amounts)
+    if mean == 0:
+        return False
+    return (statistics.pstdev(amounts) / mean) <= 0.35  # low coefficient of variation
+
+def _detect_recurring(transactions, *, inflow: bool, keyword_fn) -> list[dict]:
+    groups: dict[str, list[Transaction]] = defaultdict(list)
+    for tx in transactions:
+        if tx.date is None:
+            continue
+        amt = float(tx.amount)
+        if inflow and amt <= 0:
+            continue
+        if not inflow and amt >= 0:
+            continue
+        key = _normalize_merchant(tx.merchant_name, tx.description)
+        if key:
+            groups[key].append(tx)
+
+    detected: list[dict] = []
+    for txs in groups.values():
+        txs.sort(key=lambda t: t.date)
+        dates = [t.date for t in txs]
+        amounts = [abs(float(t.amount)) for t in txs]
+        months = {(d.year, d.month) for d in dates}
+        keyword_hit = any(keyword_fn(t.description, t.merchant_name) for t in txs)
+
+        is_recurring = (len(months) >= 2 and _amounts_consistent(amounts)) or keyword_hit
+        if not is_recurring:
+            continue
+
+        gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
+        median_gap = statistics.median(gaps) if gaps else None
+        freq_label, per_month = _cadence_from_gap(median_gap)
+        monthly_amount = statistics.median(amounts) * per_month
+        latest = txs[-1]
+
+        detected.append({
+            "name": _pretty_name(latest.merchant_name, latest.description),
+            "amount": round(monthly_amount, 2),
+            "frequency": freq_label,
+            "category": getattr(latest, "category", None),
+            "occurrences": len(txs),
+        })
+    return detected
+
 
 def _require_premium(user: User) -> None:
     if not getattr(user, "is_premium", False):
@@ -118,31 +203,17 @@ def _accounts_for_user(db: Session, user_id) -> list[BankAccount]:
 
 def _compute_bills_and_income(transactions: list[Transaction]):
     """
-    Returns (bill_map, income_map, monthly_bills_total, stable_income).
-    Averages each recurring item over however many occurrences appear.
+    Returns (bills, income, monthly_bills_total, stable_income_monthly).
+
+    `bills` and `income` are lists of detected recurring items, each a dict:
+        {name, amount (normalised to monthly), frequency, category, occurrences}
+    Totals are the sum of the monthly-normalised amounts.
     """
-    bill_map: dict[str, list[float]]   = defaultdict(list)
-    income_map: dict[str, list[float]] = defaultdict(list)
-
-    for tx in transactions:
-        amt      = float(tx.amount)
-        merchant = tx.merchant_name  # Column on Transaction — may be None
-
-        if amt < 0 and _is_bill(tx.description, merchant):
-            key = (merchant or tx.description).strip().title()
-            bill_map[key].append(abs(amt))
-        elif amt > 0 and _is_income(tx.description, merchant):
-            key = (merchant or tx.description).strip().title()
-            income_map[key].append(amt)
-
-    monthly_bills_total = sum(
-        sum(amounts) / len(amounts) for amounts in bill_map.values()
-    )
-    stable_income = sum(
-        sum(amounts) / len(amounts) for amounts in income_map.values()
-    )
-
-    return bill_map, income_map, monthly_bills_total, stable_income
+    bills = _detect_recurring(transactions, inflow=False, keyword_fn=_is_bill)
+    income = _detect_recurring(transactions, inflow=True, keyword_fn=_is_income)
+    monthly_bills_total = sum(b["amount"] for b in bills)
+    stable_income = sum(i["amount"] for i in income)
+    return bills, income, monthly_bills_total, stable_income
 
 
 # ---------------------------------------------------------------------------
@@ -235,32 +306,22 @@ def get_bills(
 ):
     since = date.today() - timedelta(days=90)
     transactions = _transactions_for_user(db, current_user.id, since)
-    bill_map, income_map, monthly_bills_total, stable_income = (
+    bills, income, monthly_bills_total, stable_income = (
         _compute_bills_and_income(transactions)
     )
 
-    # Build bill items — pull category from the most recent matching transaction
-    tx_lookup = {
-        (tx.merchant_name or tx.description).strip().title(): tx
-        for tx in transactions
-    }
-    bills = [
+    bill_items = [
         BillItem(
-            name=name,
-            amount=round(sum(amounts) / len(amounts), 2),
-            frequency="monthly",
-            category=tx_lookup.get(name, None) and getattr(tx_lookup[name], "category", None),
+            name=b["name"],
+            amount=b["amount"],
+            frequency=b["frequency"],
+            category=b["category"],
         )
-        for name, amounts in bill_map.items()
+        for b in sorted(bills, key=lambda b: b["amount"], reverse=True)
     ]
-
     income_sources = [
-        IncomeItem(
-            source=src,
-            amount=round(sum(amounts) / len(amounts), 2),
-            frequency="monthly",
-        )
-        for src, amounts in income_map.items()
+        IncomeItem(source=i["name"], amount=i["amount"], frequency=i["frequency"])
+        for i in sorted(income, key=lambda i: i["amount"], reverse=True)
     ]
 
     return BillsResponse(
@@ -268,7 +329,7 @@ def get_bills(
         annual_bills_total=round(monthly_bills_total * 12, 2),
         stable_income_monthly=round(stable_income, 2),
         surplus_deficit=round(stable_income - monthly_bills_total, 2),
-        bills=bills,
+        bills=bill_items,
         income_sources=income_sources,
     )
 
@@ -287,15 +348,18 @@ def get_liquidity(
     total_liquid = sum(
         float(a.balance)
         for a in accounts
-        if a.account_type.lower() in LIQUID_ACCOUNT_TYPES and float(a.balance) > 0
+        if (a.account_type or "").lower() in LIQUID_ACCOUNT_TYPES and float(a.balance) > 0
     )
 
     since = date.today() - timedelta(days=90)
     transactions = _transactions_for_user(db, current_user.id, since)
     _, _, monthly_obligations, _ = _compute_bills_and_income(transactions)
 
-    current_ratio = (total_liquid / monthly_obligations) if monthly_obligations > 0 else None
-    cash_buffer   = (total_liquid / monthly_obligations) if monthly_obligations > 0 else None
+    # Current ratio = liquid assets / short-term (revolving) liabilities.
+    # Cash buffer    = months of obligations the liquid assets can cover (runway).
+    cur_liabilities = float(current_liabilities(accounts))
+    current_ratio = (total_liquid / cur_liabilities) if cur_liabilities > 0 else None
+    cash_buffer = (total_liquid / monthly_obligations) if monthly_obligations > 0 else None
 
     score = 50
     insights: list[str] = []
@@ -345,11 +409,7 @@ def get_debt(
 
     accounts = _accounts_for_user(db, current_user.id)
 
-    debt_accounts = [
-        a for a in accounts
-        if any(d in a.account_type.lower() for d in DEBT_ACCOUNT_TYPES)
-        or float(a.balance) < 0
-    ]
+    debt_accounts = [a for a in accounts if classify(a.account_type)[1] == "liability"]
     total_debt = sum(abs(float(a.balance)) for a in debt_accounts)
 
     since = date.today() - timedelta(days=90)
@@ -490,7 +550,10 @@ def get_forecast(
     _require_premium(current_user)
 
     accounts = _accounts_for_user(db, current_user.id)
-    total_balance = sum(float(a.balance) for a in accounts)
+    # Start from true net worth (assets minus liabilities), not the raw sum of
+    # balances — credit/loan balances are positive amounts owed.
+    nw, _, _ = net_worth(accounts)
+    total_balance = float(nw)
 
     since = date.today() - timedelta(days=90)
     transactions = _transactions_for_user(db, current_user.id, since)
