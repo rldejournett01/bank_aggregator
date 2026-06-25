@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # Backend Python dependencies (requirements.txt + requirements-dev.txt)
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - security
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Frontend Node dependencies
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Keep the GitHub Actions themselves patched (supply-chain hygiene)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - ci
