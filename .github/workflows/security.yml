@@ -45,7 +45,7 @@ jobs:
       - run: pip install "bandit[sarif]"
       - name: Bandit scan → SARIF (always uploads to Security tab)
         run: bandit -r app -f sarif -o "$GITHUB_WORKSPACE/bandit.sarif" --severity-level medium --exit-zero
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: bandit.sarif
           category: bandit
