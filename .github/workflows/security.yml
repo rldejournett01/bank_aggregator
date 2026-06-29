@@ -65,7 +65,7 @@ jobs:
       # Dependency Graph (now enabled); kept non-blocking so graph-indexing
       # latency can't red the pipeline. pip-audit/npm audit + Dependabot also
       # cover dependency risk.
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         continue-on-error: true
         with:
           fail-on-severity: high
