@@ -1,0 +1,50 @@
+# One-command local stack: Postgres + FastAPI backend + Next.js frontend.
+#   1) cp backend/.env.example backend/.env  and fill in the keys you have
+#   2) docker compose up --build
+#   3) open http://localhost:3000   (log in / sign up)
+#
+# Browser → frontend :3000 → backend :8001 (both on localhost so cookie auth
+# stays same-site). Schema is created automatically on backend startup.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bank_aggregator
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides .env so the API talks to the db service and trusts the frontend.
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/bank_aggregator
+      FRONTEND_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Inlined at build time; the browser reaches the backend via the host.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8001
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
