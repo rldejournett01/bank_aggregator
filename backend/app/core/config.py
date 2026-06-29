@@ -42,6 +42,14 @@ class Settings(BaseModel):
     COOKIE_DOMAIN: str | None = None
 
     # =====================
+    # Rate limiting (auth endpoints) — in-memory per process.
+    # TODO: back with Redis for multi-instance deployments.
+    # =====================
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_MAX_REQUESTS: int = 10
+    RATE_LIMIT_WINDOW_SECONDS: int = 300
+
+    # =====================
     # Encryption (Fernet)
     # =====================
     FERNET_KEY: str
@@ -91,6 +99,9 @@ settings = Settings(
     COOKIE_SECURE=_as_bool(os.getenv("COOKIE_SECURE"), default=False),
     COOKIE_SAMESITE=os.getenv("COOKIE_SAMESITE", "lax"),
     COOKIE_DOMAIN=os.getenv("COOKIE_DOMAIN") or None,
+    RATE_LIMIT_ENABLED=_as_bool(os.getenv("RATE_LIMIT_ENABLED"), default=True),
+    RATE_LIMIT_MAX_REQUESTS=int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "10")),
+    RATE_LIMIT_WINDOW_SECONDS=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "300")),
     FERNET_KEY=os.getenv("FERNET_KEY"),
     PLAID_CLIENT_ID=os.getenv("PLAID_CLIENT_ID"),
     PLAID_SECRET=os.getenv("PLAID_SECRET"),

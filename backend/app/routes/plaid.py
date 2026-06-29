@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
+from app.core.audit import audit
 from app.core.crypto import encrypt_text, decrypt_text
 from app.models.linked_account import LinkedAccount
 from app.models.bank_account import BankAccount
@@ -163,6 +164,7 @@ def list_linked_accounts(
 @router.delete("/linked/{item_id}")
 def disconnect_institution(
     item_id: str,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -206,4 +208,6 @@ def disconnect_institution(
     db.delete(item)
     db.commit()
 
+    audit("institution_disconnected", request=request, user_id=current_user.id,
+          item_id=item_id, accounts_removed=removed_accounts)
     return {"status": "disconnected", "item_id": item_id, "accounts_removed": removed_accounts}

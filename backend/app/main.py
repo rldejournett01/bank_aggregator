@@ -12,11 +12,19 @@ from app.routes import analysis
 from app.routes import billing
 from app.routes import advisor
 
+import logging
+from sqlalchemy import text
+from fastapi.responses import JSONResponse
+from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 user.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Personal Bank Aggregator")
+app = FastAPI(title="Cashism API")
 
 #Protected Routes
 app.include_router(auth.router)
@@ -39,6 +47,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Added after CORS so they wrap it (rate limit runs first on the way in).
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
+
 @app.get("/")
 def root():
     return {"message": "API is running"}
+
+
+@app.get("/health")
+def health():
+    """Liveness + DB connectivity, for load balancers / uptime checks."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "up"}
+    except Exception:
+        return JSONResponse(
+            status_code=503, content={"status": "degraded", "database": "down"}
+        )

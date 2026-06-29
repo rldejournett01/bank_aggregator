@@ -1,209 +1,112 @@
-# Cashism  
-### AI-Powered Financial Aggregation Platform
+# Cashism
 
-Cashism is a full-stack fintech platform that securely aggregates multi-institution financial data, provides transaction analytics, and lays the foundation for an agentic AI financial advisor.
+### Personal financial aggregation platform
 
-Built with production-oriented architecture, encrypted credential storage, and strict user-level data isolation.
+Cashism securely connects your financial accounts (via Plaid) and gives you one
+consolidated view of your money — net worth, balances, transactions, cash-flow
+and spending analytics, and an optional AI advisor. It is **read-only**: it never
+moves, holds, or transfers funds.
 
----
-
-## 🚀 Tech Stack
-
-### Backend
-- FastAPI
-- PostgreSQL
-- SQLAlchemy (ORM)
-- Plaid API (financial aggregation)
-- JWT Authentication
-- Application-level encryption for sensitive credentials
-
-### Frontend
-- Next.js (App Router)
-- TailwindCSS v4
-- Recharts (data visualization)
+> **Status:** working MVP. Runs end-to-end locally; see [TODO.md](TODO.md) for the
+> remaining key/infra work before a public launch, and [COMPLIANCE.md](COMPLIANCE.md)
+> for the fintech compliance checklist.
 
 ---
 
-## 🔐 Security Features
+## 🚀 Tech stack
 
-- Encrypted storage of Plaid access tokens
-- User-scoped data access control
-- Idempotent transaction ingestion
-- JWT-based authentication
-- Route-level authorization enforcement
-- SSR-safe frontend rendering
+**Backend** — FastAPI · PostgreSQL · SQLAlchemy · Alembic · Plaid · Stripe ·
+Anthropic (AI advisor) · JWT httpOnly-cookie auth with refresh-token rotation ·
+Fernet-encrypted credential storage.
 
-Future hardening roadmap:
-- HTTP-only secure cookies
-- Refresh token rotation
-- Rate limiting
-- Audit logging
-- 2FA authentication
-- Secure header middleware
+**Frontend** — Next.js (App Router) · TailwindCSS · Recharts.
+
+**Ops** — Docker / docker-compose · GitHub Actions CI + security scanning
+(CodeQL, Bandit, gitleaks, dependency audit) · Dependabot.
 
 ---
 
-## 🏗 Architecture Overview
+## 💳 Features
 
-The system is modular and layered:
-backend/
-app/
-core/ → security, crypto, config
-models/ → database models
-schemas/ → Pydantic schemas
-routes/ → API endpoints
-integrations/ → Plaid integration layer
-
-
-
-Key architectural principles:
-
-- Separation of concerns
-- Dependency injection
-- Idempotent financial data ingestion
-- Encrypted credential handling
-- User-scoped relational integrity
-
----
-
-## 💳 Core Features
-
-### 1. Secure Bank Linking
-- Plaid Link integration
-- Public token exchange
-- Encrypted access token storage
-
-### 2. Account Synchronization
-- Account upsert logic
-- Transaction ingestion with duplicate prevention
-- Category classification support
-
-### 3. Dashboard Analytics
-- Account-level balance tracking
-- Transaction filtering (date, search)
-- Category summaries
-- Pagination
-
-### 4. Account Management
-- View account details
-- Delete accounts
-- Scoped transaction access
+- **Secure bank linking** via Plaid (credentials never touch the app; access
+  tokens encrypted at rest).
+- **Incremental sync** using Plaid `/transactions/sync` (cursor-based) + webhook
+  auto-sync; each transaction mapped to its correct account.
+- **Dashboard** — net worth (assets − liabilities), per-account balances, and a
+  net-worth-over-time chart.
+- **Accounts** — transaction list with date/search filters, pagination, and a
+  spending-by-category breakdown.
+- **Analysis** — recurring bills & income detection, liquidity/solvency, and
+  (Premium) debt, profitability, and a multi-horizon forecast.
+- **AI advisor** (Premium) — a tool-using Claude agent that answers questions
+  grounded in your own data. Informational only, not financial advice.
+- **Billing** — Stripe subscriptions for Premium.
+- **Settings & data rights** — change password, sign out everywhere, disconnect
+  an institution, **export all your data**, and **delete your account**.
+- **Security** — refresh-token rotation with reuse detection, security headers,
+  auth rate limiting, audit logging, and a health check.
 
 ---
 
-## 🧠 Planned AI Expansion
+## 🏃 Quickstart
 
-Cashism is designed to evolve into an AI-powered financial intelligence system.
+### Option A — Docker (everything, one command)
 
-Planned features:
+```bash
+cp backend/.env.example backend/.env    # fill in keys you have (see TODO.md)
+docker compose up --build
+```
 
-- Agentic AI Financial Advisor
-- Tool-using AI capable of querying structured financial data
-- Automated monthly spending summaries
-- Budget forecasting
-- Anomaly detection
-- Context-aware financial insights
+Then open **http://localhost:3000**. (Backend on `:8001`, Postgres on `:5432`.)
 
-Future AI Architecture:
-- Structured SQL data retrieval layer
-- Financial reasoning engine
-- LLM-driven advisory layer
-- Hybrid structured + semantic retrieval
+### Option B — run locally
+
+```bash
+# Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                    # fill in SECRET_KEY, FERNET_KEY, Plaid, etc.
+uvicorn app.main:app --reload --port 8001
+
+# Frontend (new terminal)
+cd frontend
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8001 npm run dev
+```
+
+Open **http://localhost:3000** (use `localhost`, not `127.0.0.1`, so cookie auth
+stays same-site with the API). The database schema is created automatically on
+backend startup.
+
+**Plaid sandbox:** when connecting a bank, use `user_good` / `pass_good`.
 
 ---
 
-## 📊 Database Model Highlights
+## ⚙️ Configuration
 
-- Users
-- LinkedAccounts (Plaid item-level linkage)
-- BankAccounts (institution accounts)
-- Transactions (idempotent, external ID tracked)
-- Future: AuditLogs, RefreshTokens
-
-All financial records are scoped by user ownership to prevent cross-user data access.
+All settings are environment variables — see **[backend/.env.example](backend/.env.example)**
+for the full list. Required: `SECRET_KEY`, `FERNET_KEY`, `DATABASE_URL`, and Plaid
+keys. Optional (degrade gracefully if unset): `STRIPE_*` (billing),
+`ANTHROPIC_API_KEY` (AI advisor), `PLAID_WEBHOOK_URL` (auto-sync).
 
 ---
 
-## 🛠 Setup Instructions
-
-### 1️⃣ Backend
+## 🧪 Tests
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-
-
-Create a backend/.env file:
-
-```bash
-# Required
-SECRET_KEY=your_jwt_secret
-FERNET_KEY=your_fernet_key            # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-PLAID_CLIENT_ID=your_id
-PLAID_SECRET=your_secret
-PLAID_ENV=sandbox                     # sandbox | development | production
-DATABASE_URL=postgresql://localhost/bank_aggregator
-
-# Optional — auth cookies (production)
-COOKIE_SECURE=true                    # true behind HTTPS
-COOKIE_SAMESITE=lax                   # use "none" for cross-site frontends (requires COOKIE_SECURE)
-FRONTEND_URL=http://localhost:3000
-ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# Optional — Plaid webhooks (auto-sync on new transactions)
-PLAID_WEBHOOK_URL=https://your-host/plaid/webhook
-
-# Optional — Stripe billing (Premium upgrade). If unset, upgrade is disabled.
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_ID=price_...             # a recurring subscription price
-
-# Optional — AI advisor (premium feature). If unset, advisor is disabled.
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-opus-4-8
-```
-
-Run database migrations after installing:
-
-```bash
-alembic upgrade head
-```
-
-Run the tests:
-
-```bash
 pip install -r requirements-dev.txt
 pytest
 ```
 
-2️⃣ Frontend
-cd frontend
-npm install
-npm run dev
+CI runs the test suite (against a Postgres service), the frontend build, and a
+security suite (CodeQL, Bandit, gitleaks, pip-audit/npm-audit, dependency review)
+on every PR.
 
-Frontend runs at:
+---
 
-http://localhost:3000
+## 📚 More
 
-Backend runs at:
-
-http://localhost:8000
-
-```
-📌 Engineering Principles
-
-Secure by default
-
-Explicit authorization checks
-
-Deterministic SSR rendering
-
-Modular service design
-
-Scalable data modeling
-
-Clear separation of integration layer
+- [COMPLIANCE.md](COMPLIANCE.md) — fintech compliance & ethics checklist (not legal advice)
+- [TODO.md](TODO.md) — what's left for production, with instructions

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, Request
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
+from app.core.audit import audit
 from app.core.security import get_current_user, clear_auth_cookies
 from app.core.crypto import decrypt_text
 from app.integrations.plaid_client import plaid_client
@@ -97,6 +98,7 @@ def export_my_data(
 
 @router.delete("/me")
 def delete_my_account(
+    request: Request,
     response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -129,5 +131,6 @@ def delete_my_account(
     db.query(User).filter(User.id == uid).delete(synchronize_session=False)
     db.commit()
 
+    audit("account_deleted", request=request, user_id=uid)
     clear_auth_cookies(response)
     return {"status": "account_deleted"}

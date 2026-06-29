@@ -19,6 +19,7 @@ from app.core.security import (
     REFRESH_COOKIE,
 )
 from app.core.deps import get_db
+from app.core.audit import audit
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
 
@@ -55,15 +56,18 @@ def signup(user: UserCreate, response: Response, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
     db_user = db.query(User).filter(User.email == form_data.username).first()
     if not db_user or not verify_password(form_data.password, db_user.hashed_password):
+        audit("login_failed", request=request, email=form_data.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     _issue_session(response, db, db_user)
+    audit("login_succeeded", request=request, user_id=db_user.id)
     return {"status": "authenticated", "id": str(db_user.id)}
 
 
