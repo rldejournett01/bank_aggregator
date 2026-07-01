@@ -75,6 +75,11 @@ class Settings(BaseModel):
     ANTHROPIC_API_KEY: str | None = None
     ANTHROPIC_MODEL: str = "claude-opus-4-8"
 
+    # Hard kill-switch for the AI advisor — independent of is_premium and of
+    # whether an API key is configured. "Coming soon": nobody can use it,
+    # including Premium users, until this is flipped to false.
+    ADVISOR_LOCKED: bool = True
+
     @field_validator("PLAID_ENV")
     def map_plaid_env(cls, value: str) -> str:
         env_map = {
@@ -112,4 +117,5 @@ settings = Settings(
     STRIPE_PRICE_ID=os.getenv("STRIPE_PRICE_ID") or None,
     ANTHROPIC_API_KEY=os.getenv("ANTHROPIC_API_KEY") or None,
     ANTHROPIC_MODEL=os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8"),
+    ADVISOR_LOCKED=_as_bool(os.getenv("ADVISOR_LOCKED"), default=True),
 )

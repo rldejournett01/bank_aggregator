@@ -71,7 +71,7 @@ function AccountTypeIcon({ type, accountClass }: { type: string; accountClass: s
 
 export default function DashboardPage() {
   const { authed, ready, logout } = useAuth();
-  const [me, setMe] = useState<{ email: string } | null>(null);
+  const [me, setMe] = useState<{ email: string; first_name?: string | null } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [dash, setDash] = useState<DashboardResponse | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -106,7 +106,7 @@ export default function DashboardPage() {
 
     async function init() {
       try {
-        setMe(await apiFetch<{ email: string }>("/users/me"));
+        setMe(await apiFetch<{ email: string; first_name?: string | null }>("/users/me"));
       } catch (e) {
         setErr(getErrorMessage(e, "Failed to load user"));
         logout();
@@ -144,7 +144,7 @@ export default function DashboardPage() {
           <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-1">Overview</p>
           <h1 className="text-2xl font-light text-[#0d1f0d] tracking-tight">
             {me?.email
-              ? <>Good morning, <span className="font-semibold">{me.email.split("@")[0]}</span></>
+              ? <>Good morning, <span className="font-semibold">{me.first_name || me.email.split("@")[0]}</span></>
               : "Dashboard"}
           </h1>
         </div>

@@ -5,7 +5,14 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, getErrorMessage } from "@/lib/api";
 
-type Me = { id: string; email: string; created_at: string; is_premium: boolean };
+type Me = {
+  id: string;
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  created_at: string;
+  is_premium: boolean;
+};
 type LinkedItem = {
   id: string;
   item_id: string;
@@ -165,6 +172,12 @@ export default function SettingsPage() {
       {/* Profile */}
       <Card label="Profile" title="Your account">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          {(me.first_name || me.last_name) && (
+            <div>
+              <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-1">Name</p>
+              <p className="text-[#0d1f0d]">{[me.first_name, me.last_name].filter(Boolean).join(" ")}</p>
+            </div>
+          )}
           <div>
             <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-1">Email</p>
             <p className="text-[#0d1f0d]">{me.email}</p>

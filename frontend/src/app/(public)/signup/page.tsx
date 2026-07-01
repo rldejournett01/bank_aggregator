@@ -5,24 +5,66 @@ import Link from "next/link";
 import { apiFetch, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
+const MIN_SIGNUP_AGE_YEARS = 18;
+
+function calculateAge(dob: string): number | null {
+  if (!dob) return null;
+  const born = new Date(dob + "T00:00:00");
+  if (Number.isNaN(born.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - born.getFullYear();
+  const hadBirthdayThisYear =
+    today.getMonth() > born.getMonth() ||
+    (today.getMonth() === born.getMonth() && today.getDate() >= born.getDate());
+  if (!hadBirthdayThisYear) age -= 1;
+  return age;
+}
+
 export default function SignupPage() {
   const { setAuthed } = useAuth();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [dob, setDob] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [agreed, setAgreed] = useState(false);
 
+  const inputCls =
+    "w-full px-4 py-3 bg-white border border-[#c8dcc8] rounded text-sm text-[#0d1f0d] placeholder:text-[#b0c8b0] focus:outline-none focus:border-[#1a7a1a] focus:ring-1 focus:ring-[#1a7a1a] transition-colors";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMsg(null);
+
+    if (!firstName.trim() || !lastName.trim()) {
+      setMsg("Please enter your first and last name.");
+      return;
+    }
+    if (!dob) {
+      setMsg("Please enter your date of birth.");
+      return;
+    }
+    const age = calculateAge(dob);
+    if (age === null || age < MIN_SIGNUP_AGE_YEARS) {
+      setMsg(`You must be at least ${MIN_SIGNUP_AGE_YEARS} years old to sign up.`);
+      return;
+    }
+
+    setBusy(true);
     try {
       // Signup logs the user straight in (sets auth cookies).
       await apiFetch<{ message: string }>("/auth/signup", {
         method: "POST",
-        body: { email, password },
+        body: {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          email,
+          date_of_birth: dob,
+          password,
+        },
       });
       setAuthed(true);
       setSuccess(true);
@@ -50,7 +92,7 @@ export default function SignupPage() {
 
       {/* Main */}
       <main className="flex-1 flex items-center justify-center px-6 py-16">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-md">
 
           {success ? (
             /* Success state */
@@ -81,7 +123,36 @@ export default function SignupPage() {
               </div>
 
               {/* Form */}
-              <div className="space-y-4">
+              <form onSubmit={submit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] tracking-widest uppercase text-[#4a7a4a] mb-2">
+                      First name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Jane"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      autoComplete="given-name"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] tracking-widest uppercase text-[#4a7a4a] mb-2">
+                      Last name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Doe"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      autoComplete="family-name"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] tracking-widest uppercase text-[#4a7a4a] mb-2">
                     Email
@@ -91,8 +162,24 @@ export default function SignupPage() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-[#c8dcc8] rounded text-sm text-[#0d1f0d] placeholder:text-[#b0c8b0] focus:outline-none focus:border-[#1a7a1a] focus:ring-1 focus:ring-[#1a7a1a] transition-colors font-['DM_Mono',monospace]"
+                    autoComplete="email"
+                    className={`${inputCls} font-['DM_Mono',monospace]`}
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] tracking-widest uppercase text-[#4a7a4a] mb-2">
+                    Date of birth
+                  </label>
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    autoComplete="bday"
+                    max={new Date().toISOString().slice(0, 10)}
+                    className={`${inputCls} font-['DM_Mono',monospace]`}
+                  />
+                  <p className="mt-1.5 text-[10px] text-[#8aaa8a]">You must be 18 or older to use Cashism.</p>
                 </div>
 
                 <div>
@@ -104,9 +191,10 @@ export default function SignupPage() {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-[#c8dcc8] rounded text-sm text-[#0d1f0d] placeholder:text-[#b0c8b0] focus:outline-none focus:border-[#1a7a1a] focus:ring-1 focus:ring-[#1a7a1a] transition-colors font-['DM_Mono',monospace]"
+                    autoComplete="new-password"
+                    className={`${inputCls} font-['DM_Mono',monospace]`}
                   />
-                  <p className="mt-1.5 text-[10px] text-[#8aaa8a]">Minimum 8 characters recommended</p>
+                  <p className="mt-1.5 text-[10px] text-[#8aaa8a]">Minimum 8 characters</p>
                 </div>
 
                 {msg && (
@@ -123,7 +211,7 @@ export default function SignupPage() {
                     className="mt-0.5 accent-[#1a7a1a]"
                   />
                   <span className="text-[11px] text-[#4a7a4a] leading-relaxed">
-                    I am at least 18 years old and agree to the{" "}
+                    I agree to the{" "}
                     <a href="/terms" target="_blank" className="text-[#1a7a1a] font-semibold hover:underline">Terms of Service</a>{" "}
                     and{" "}
                     <a href="/privacy" target="_blank" className="text-[#1a7a1a] font-semibold hover:underline">Privacy Policy</a>,
@@ -132,13 +220,13 @@ export default function SignupPage() {
                 </label>
 
                 <button
-                  onClick={submit}
+                  type="submit"
                   disabled={busy || !agreed}
                   className="w-full py-3 bg-[#1a7a1a] text-white text-xs font-semibold tracking-widest uppercase rounded hover:bg-[#155e15] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 mt-2"
                 >
                   {busy ? "Creating account..." : "Create account →"}
                 </button>
-              </div>
+              </form>
 
               {/* Divider */}
               <div className="mt-8 pt-8 border-t border-[#d4e8d4]">
@@ -157,7 +245,7 @@ export default function SignupPage() {
 
       {/* Footer note */}
       <div className="px-8 py-4 border-t border-[#d4e8d4] flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#1a7a1a]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#1a7a1a] inline-block" />
         <span className="text-[10px] tracking-widest uppercase text-[#8aaa8a]">
           Encrypted in transit · Bank credentials never stored — secured by Plaid
         </span>

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -29,6 +30,7 @@ class ChatResponse(BaseModel):
 def advisor_status(current_user: User = Depends(get_current_user)):
     """Tell the frontend whether the advisor is available and unlocked."""
     return {
+        "locked": settings.ADVISOR_LOCKED,
         "enabled": advisor_enabled(),
         "is_premium": bool(getattr(current_user, "is_premium", False)),
     }
@@ -40,6 +42,10 @@ def advisor_chat(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Hard kill-switch — checked before premium/config, so it can't be bypassed
+    # by an upgraded account or a configured API key.
+    if settings.ADVISOR_LOCKED:
+        raise HTTPException(status_code=423, detail="The AI advisor is coming soon.")
     if not advisor_enabled():
         raise HTTPException(status_code=503, detail="The AI advisor is not configured.")
     _require_premium(current_user)

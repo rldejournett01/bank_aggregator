@@ -44,7 +44,13 @@ def signup(user: UserCreate, response: Response, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
 
-    new_user = User(email=user.email, hashed_password=hash_password(user.password))
+    new_user = User(
+        email=user.email,
+        hashed_password=hash_password(user.password),
+        first_name=user.first_name,
+        last_name=user.last_name,
+        date_of_birth=user.date_of_birth,
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)

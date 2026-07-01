@@ -16,7 +16,7 @@ const SUGGESTIONS = [
 
 export default function AdvisorPage() {
   const { authed, ready } = useAuth();
-  const [status, setStatus] = useState<{ enabled: boolean; is_premium: boolean } | null>(null);
+  const [status, setStatus] = useState<{ locked: boolean; enabled: boolean; is_premium: boolean } | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,7 @@ export default function AdvisorPage() {
   useEffect(() => {
     if (!ready) return;
     if (!authed) { window.location.href = "/login"; return; }
-    apiFetch<{ enabled: boolean; is_premium: boolean }>("/advisor/status")
+    apiFetch<{ locked: boolean; enabled: boolean; is_premium: boolean }>("/advisor/status")
       .then(setStatus)
       .catch((e) => setErr(e.message ?? "Failed to load advisor"));
   }, [ready, authed]);
@@ -92,6 +92,26 @@ export default function AdvisorPage() {
       </Link>
     </div>
   );
+
+  if (status.locked) {
+    return (
+      <div className="space-y-8" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+        {Header}
+        <div className="bg-white rounded-xl border border-[#c8dcc8] px-8 py-14 text-center">
+          <div className="w-14 h-14 rounded-full bg-[#f0f7f0] border border-[#d4e8d4] flex items-center justify-center mx-auto mb-5">
+            <svg className="w-6 h-6 text-[#8aaa8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <p className="text-[10px] tracking-widest uppercase text-[#8aaa8a] mb-2">Locked</p>
+          <p className="text-base font-semibold text-[#0d1f0d] mb-2">AI advisor — coming soon</p>
+          <p className="text-sm text-[#4a7a4a] max-w-sm mx-auto">
+            We&apos;re still fine-tuning this feature before opening it up. Check back soon — it&apos;ll be worth the wait.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!status.enabled) {
     return (
