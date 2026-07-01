@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -71,7 +71,7 @@ function AccountTypeIcon({ type, accountClass }: { type: string; accountClass: s
 
 export default function DashboardPage() {
   const { authed, ready, logout } = useAuth();
-  const [me, setMe] = useState<any>(null);
+  const [me, setMe] = useState<{ email: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [dash, setDash] = useState<DashboardResponse | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -94,9 +94,9 @@ export default function DashboardPage() {
       await loadDashboard();
       setSyncStatus("done");
       setSyncMsg("Synced successfully");
-    } catch (e: any) {
+    } catch (e) {
       setSyncStatus("error");
-      setSyncMsg(e.message ?? "Sync failed");
+      setSyncMsg(getErrorMessage(e, "Sync failed"));
     }
   }
 
@@ -104,15 +104,22 @@ export default function DashboardPage() {
     if (!ready) return;
     if (!authed) { window.location.href = "/login"; return; }
 
-    apiFetch("/users/me").then(setMe).catch((e) => {
-      setErr(e.message ?? "Failed to load user");
-      logout();
-      window.location.href = "/login";
-    });
-
-    loadDashboard().catch((e) => {
-      setErr(e.message ?? "Failed to load dashboard");
-    });
+    async function init() {
+      try {
+        setMe(await apiFetch<{ email: string }>("/users/me"));
+      } catch (e) {
+        setErr(getErrorMessage(e, "Failed to load user"));
+        logout();
+        window.location.href = "/login";
+        return;
+      }
+      try {
+        await loadDashboard();
+      } catch (e) {
+        setErr(getErrorMessage(e, "Failed to load dashboard"));
+      }
+    }
+    init();
   }, [ready, authed, logout]);
 
   if (!ready) {
@@ -127,7 +134,6 @@ export default function DashboardPage() {
   }
 
   const accounts = dash?.accounts ?? [];
-  const totalBalance = dash?.total_balance ?? "0";
 
   return (
     <div className="space-y-8" style={{ fontFamily: "'DM Sans', sans-serif" }}>

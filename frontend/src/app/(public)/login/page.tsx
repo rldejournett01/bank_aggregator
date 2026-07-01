@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { apiForm } from "@/lib/api";
+import { apiForm, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -24,8 +24,8 @@ export default function LoginPage() {
       });
       setAuthed(true);
       window.location.href = "/dashboard";
-    } catch (err: any) {
-      setMsg(err.message ?? "Login failed");
+    } catch (err) {
+      setMsg(getErrorMessage(err, "Login failed"));
     } finally {
       setBusy(false);
     }
@@ -104,7 +104,7 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="mt-8 pt-8 border-t border-[#d4e8d4]">
             <p className="text-xs text-[#8aaa8a]">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/signup" className="text-[#1a7a1a] font-semibold hover:text-[#0d1f0d] transition-colors">
                 Create one
               </Link>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 
 type Me = { id: string; email: string; created_at: string; is_premium: boolean };
 type LinkedItem = {
@@ -64,8 +64,8 @@ export default function SettingsPage() {
       await apiFetch("/auth/change-password", { method: "POST", body: { current_password: curPw, new_password: newPw } });
       setCurPw(""); setNewPw(""); setConfirmPw("");
       setMsg({ kind: "ok", text: "Password changed. Other devices have been signed out." });
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e.message ?? "Could not change password" });
+    } catch (e) {
+      setMsg({ kind: "err", text: getErrorMessage(e, "Could not change password") });
     } finally {
       setPwBusy(false);
     }
@@ -83,8 +83,8 @@ export default function SettingsPage() {
       await apiFetch(`/plaid/linked/${encodeURIComponent(item.item_id)}`, { method: "DELETE" });
       setMsg({ kind: "ok", text: `${name} disconnected.` });
       await load();
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e.message ?? "Could not disconnect" });
+    } catch (e) {
+      setMsg({ kind: "err", text: getErrorMessage(e, "Could not disconnect") });
     }
   }
 
@@ -98,8 +98,8 @@ export default function SettingsPage() {
       a.download = `cashism-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e.message ?? "Export failed" });
+    } catch (e) {
+      setMsg({ kind: "err", text: getErrorMessage(e, "Export failed") });
     }
   }
 
@@ -107,8 +107,8 @@ export default function SettingsPage() {
     try {
       const res = await apiFetch<{ url: string }>("/billing/portal", { method: "POST" });
       window.location.href = res.url;
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e.message ?? "Billing portal unavailable" });
+    } catch (e) {
+      setMsg({ kind: "err", text: getErrorMessage(e, "Billing portal unavailable") });
     }
   }
 
@@ -118,8 +118,8 @@ export default function SettingsPage() {
       await apiFetch("/users/me", { method: "DELETE" });
       await logout();
       window.location.href = "/login";
-    } catch (e: any) {
-      setMsg({ kind: "err", text: e.message ?? "Could not delete account" });
+    } catch (e) {
+      setMsg({ kind: "err", text: getErrorMessage(e, "Could not delete account") });
     }
   }
 

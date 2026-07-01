@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export default function SignupPage() {
@@ -27,8 +27,8 @@ export default function SignupPage() {
       setAuthed(true);
       setSuccess(true);
       window.location.href = "/dashboard";
-    } catch (err: any) {
-      setMsg(err.message ?? "Signup failed");
+    } catch (err) {
+      setMsg(getErrorMessage(err, "Signup failed"));
     } finally {
       setBusy(false);
     }
@@ -61,7 +61,7 @@ export default function SignupPage() {
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-[#0d1f0d] mb-2">Account created</h2>
-              <p className="text-sm text-[#4a7a4a] mb-8">You're all set. Sign in to get started.</p>
+              <p className="text-sm text-[#4a7a4a] mb-8">You&apos;re all set. Sign in to get started.</p>
               <Link
                 href="/login"
                 className="px-6 py-3 bg-[#1a7a1a] text-white text-xs font-semibold tracking-widest uppercase rounded hover:bg-[#155e15] transition-colors duration-200"

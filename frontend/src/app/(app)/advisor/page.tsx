@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -39,8 +39,8 @@ export default function AdvisorPage() {
     try {
       const res = await apiFetch<{ url: string }>("/billing/checkout", { method: "POST" });
       window.location.href = res.url;
-    } catch (e: any) {
-      alert(e.message ?? "Upgrade is currently unavailable.");
+    } catch (e) {
+      alert(getErrorMessage(e, "Upgrade is currently unavailable."));
     }
   }
 
@@ -58,8 +58,8 @@ export default function AdvisorPage() {
         body: { message, history },
       });
       setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
-    } catch (e: any) {
-      setErr(e.message ?? "The advisor couldn't respond.");
+    } catch (e) {
+      setErr(getErrorMessage(e, "The advisor couldn't respond."));
     } finally {
       setBusy(false);
     }
@@ -98,7 +98,7 @@ export default function AdvisorPage() {
       <div className="space-y-8" style={{ fontFamily: "'DM Sans', sans-serif" }}>
         {Header}
         <div className="bg-white rounded-xl border border-[#c8dcc8] px-8 py-10 text-center">
-          <p className="text-sm text-[#0d1f0d] font-semibold mb-1">The AI advisor isn't enabled yet</p>
+          <p className="text-sm text-[#0d1f0d] font-semibold mb-1">The AI advisor isn&apos;t enabled yet</p>
           <p className="text-xs text-[#4a7a4a]">Set <code>ANTHROPIC_API_KEY</code> on the backend to turn it on.</p>
         </div>
       </div>

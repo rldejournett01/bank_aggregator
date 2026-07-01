@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
   PieChart,
   Pie,
@@ -42,12 +42,17 @@ const CHART_COLORS = [
   "#5aba5a", "#70c870", "#90d890", "#b0e8b0",
 ];
 
-const CustomTooltip = ({ active, payload }: any) => {
+type ChartTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number }>;
+};
+
+const CustomTooltip = ({ active, payload }: ChartTooltipProps) => {
   if (active && payload?.length) {
     return (
       <div className="bg-white border border-[#c8dcc8] rounded-lg px-3 py-2 text-xs shadow-sm">
         <p className="font-semibold text-[#0d1f0d]">{payload[0].name}</p>
-        <p className="text-[#1a7a1a] font-mono">${payload[0].value.toFixed(2)}</p>
+        <p className="text-[#1a7a1a] font-mono">${(payload[0].value ?? 0).toFixed(2)}</p>
       </div>
     );
   }
@@ -90,8 +95,8 @@ export default function AccountDetailPage() {
         `/accounts/${accountId}/transactions?${p.toString()}`
       );
       setData(res);
-    } catch (e: any) {
-      setErr(e.message ?? "Failed to load transactions");
+    } catch (e) {
+      setErr(getErrorMessage(e, "Failed to load transactions"));
     } finally {
       setBusy(false);
     }
@@ -115,8 +120,8 @@ export default function AccountDetailPage() {
     try {
       await apiFetch(`/accounts/${accountId}`, { method: "DELETE" });
       window.location.href = "/dashboard";
-    } catch (e: any) {
-      alert(e.message ?? "Failed to delete account");
+    } catch (e) {
+      alert(getErrorMessage(e, "Failed to delete account"));
     }
   }
 
