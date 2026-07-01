@@ -1,10 +1,15 @@
-# One-command local stack: Postgres + FastAPI backend + Next.js frontend.
-#   1) cp backend/.env.example backend/.env  and fill in the keys you have
-#   2) docker compose up --build
-#   3) open http://localhost:3000   (log in / sign up)
+# Production-grade local stack: Postgres + FastAPI backend + Next.js frontend.
+#   1) cp backend/.env.example backend/.env   (fill in the keys you have)
+#   2) docker compose up --build -d
+#   3) open http://localhost:3000
 #
-# Browser → frontend :3000 → backend :8001 (both on localhost so cookie auth
-# stays same-site). Schema is created automatically on backend startup.
+# Browser → frontend :3000 → backend :8002 (both on localhost so cookie auth
+# stays same-site). Postgres is NOT published to the host — only the backend
+# reaches it over the internal network. Schema is created on backend startup.
+#
+# For a real (public) deployment: serve over HTTPS behind a reverse proxy and
+# set ENVIRONMENT=production + COOKIE_SECURE=true in backend/.env (this enables
+# HSTS and Secure cookies, which don't work over plain http://localhost).
 
 services:
   db:
@@ -15,6 +20,9 @@ services:
       POSTGRES_DB: bank_aggregator
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -33,18 +41,30 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8001:8000"
+      - "8002:8000"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   frontend:
     build:
       context: ./frontend
       args:
         # Inlined at build time; the browser reaches the backend via the host.
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:8001
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8002
+    environment:
+      # Force the Next standalone server to bind all interfaces. Docker
+      # auto-sets HOSTNAME to the container id at runtime (overriding the
+      # Dockerfile ENV), which would make Next bind only the container IP.
+      HOSTNAME: "0.0.0.0"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   pgdata:

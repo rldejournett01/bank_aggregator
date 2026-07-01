@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from jose import JWTError
+import jwt  # PyJWT
 
 from app.schemas.user import UserCreate, ChangePassword
 from app.core.security import (
@@ -88,7 +88,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
             raise HTTPException(status_code=401, detail="Invalid token type")
         jti = payload.get("jti")
         user_id = payload.get("sub")
-    except JWTError:
+    except jwt.PyJWTError:
         clear_auth_cookies(response)
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -135,7 +135,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
                     RefreshToken.id == jti
                 ).update({"revoked": True})
                 db.commit()
-        except JWTError:
+        except jwt.PyJWTError:
             pass
     clear_auth_cookies(response)
     return {"status": "logged_out"}
