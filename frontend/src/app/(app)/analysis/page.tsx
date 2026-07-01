@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 import {
-    AreaChart, Area, BarChart, Bar, LineChart, Line,
+    AreaChart, Area, BarChart, Bar,
     XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
     ReferenceLine,
 } from "recharts";
@@ -163,13 +163,19 @@ function SectionHeader({ label, title, free }: { label: string; title: string; f
     );
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+type ChartTooltipProps = {
+    active?: boolean;
+    label?: string | number;
+    payload?: Array<{ name?: string; value?: number; color?: string }>;
+};
+
+const CustomTooltip = ({ active, payload, label }: ChartTooltipProps) => {
     if (!active || !payload?.length) return null;
     return (
         <div className="bg-white border border-[#c8dcc8] rounded-lg px-3 py-2 text-xs shadow-sm">
             <p className="font-semibold text-[#0d1f0d] mb-1">{label}</p>
-            {payload.map((p: any, i: number) => (
-                <p key={`${p.name}-${i}`} style={{ color: p.color }}>{p.name}: {fmtK(p.value)}</p>
+            {payload.map((p, i) => (
+                <p key={`${p.name}-${i}`} style={{ color: p.color }}>{p.name}: {fmtK(p.value ?? 0)}</p>
             ))}
         </div>
     );
@@ -250,8 +256,8 @@ export default function AnalysisPage() {
         try {
             const res = await apiFetch<{ url: string }>("/billing/checkout", { method: "POST" });
             window.location.href = res.url;
-        } catch (e: any) {
-            alert(e.message ?? "Upgrade is currently unavailable.");
+        } catch (e) {
+            alert(getErrorMessage(e, "Upgrade is currently unavailable."));
         }
     }
 

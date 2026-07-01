@@ -1,6 +1,11 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
+/** Narrow an unknown thrown value to a message, falling back to `fallback`. */
+export function getErrorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
+
 // Auth now lives in httpOnly cookies — the browser attaches them automatically
 // when we send credentials. The optional `token` param is kept for backward
 // compatibility (and server-side callers) but is no longer required.

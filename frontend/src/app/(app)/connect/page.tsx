@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePlaidLink } from "react-plaid-link";
+import { usePlaidLink, PlaidLinkOnSuccessMetadata } from "react-plaid-link";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getErrorMessage } from "@/lib/api";
 
 type LinkTokenResponse = { link_token: string };
 
@@ -39,14 +39,14 @@ export default function ConnectPage() {
       setLinkToken(res.link_token);
       setStatus("idle");
       await loadLinked();
-    })().catch((e: any) => {
+    })().catch((e) => {
       setStatus("error");
-      setStatusMsg(e.message ?? "Failed to create link token");
+      setStatusMsg(getErrorMessage(e, "Failed to create link token"));
     });
   }, [ready, authed]);
 
   const onSuccess = useMemo(
-    () => async (public_token: string, metadata: any) => {
+    () => async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
       const institution_id = metadata?.institution?.institution_id ?? null;
       const institution_name = metadata?.institution?.name ?? null;
       setStatus("loading");
@@ -59,9 +59,9 @@ export default function ConnectPage() {
         setStatus("success");
         setStatusMsg(`${institution_name ?? "Bank"} connected successfully`);
         await loadLinked();
-      } catch (e: any) {
+      } catch (e) {
         setStatus("error");
-        setStatusMsg(e.message ?? "Connection failed");
+        setStatusMsg(getErrorMessage(e, "Connection failed"));
       }
     },
     []
