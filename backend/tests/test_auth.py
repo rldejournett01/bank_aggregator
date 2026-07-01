@@ -13,6 +13,7 @@ from app.main import app
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
+from tests.conftest import signup_body
 
 
 @pytest.fixture
@@ -30,7 +31,7 @@ def email():
 
 def test_signup_sets_cookies_and_authenticates(email):
     c = TestClient(app)
-    r = c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    r = c.post("/auth/signup", json=signup_body(email))
     assert r.status_code == 200, r.text
     assert "access_token" in c.cookies and "refresh_token" in c.cookies
 
@@ -41,7 +42,7 @@ def test_signup_sets_cookies_and_authenticates(email):
 
 def test_refresh_rotates_and_detects_reuse(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     old_refresh = c.cookies.get("refresh_token")
 
     r = c.post("/auth/refresh")
@@ -59,14 +60,14 @@ def test_refresh_rotates_and_detects_reuse(email):
 
 def test_logout_clears_session(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     assert c.post("/auth/logout").status_code == 200
     assert c.get("/users/me").status_code == 401
 
 
 def test_bad_password_rejected(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     r = c.post("/auth/login", data={"username": email, "password": "wrong"})
     assert r.status_code == 401
 

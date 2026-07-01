@@ -21,3 +21,14 @@ class FakeTx:
 class FakeAccount:
     account_type: str
     balance: float
+
+
+def signup_body(email: str, password: str = "secret123") -> dict:
+    """A valid /auth/signup payload (adult DOB, real-looking name fields)."""
+    return {
+        "email": email,
+        "password": password,
+        "first_name": "Test",
+        "last_name": "User",
+        "date_of_birth": "1990-01-01",
+    }

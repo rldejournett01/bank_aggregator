@@ -8,6 +8,7 @@ from app.main import app
 from app.core.database import SessionLocal
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
+from tests.conftest import signup_body
 
 
 @pytest.fixture
@@ -40,7 +41,7 @@ def test_security_headers_present():
 
 def test_change_password_flow(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
 
     # wrong current password is rejected
     assert c.post("/auth/change-password",
@@ -60,7 +61,7 @@ def test_change_password_flow(email):
 
 def test_export_returns_full_shape(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     r = c.get("/users/me/export")
     assert r.status_code == 200
     body = r.json()
@@ -71,14 +72,14 @@ def test_export_returns_full_shape(email):
 
 def test_logout_all_revokes_session(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     assert c.post("/auth/logout-all").status_code == 200
     assert c.get("/users/me").status_code == 401
 
 
 def test_delete_account_erases_user(email):
     c = TestClient(app)
-    c.post("/auth/signup", json={"email": email, "password": "secret123"})
+    c.post("/auth/signup", json=signup_body(email))
     assert c.delete("/users/me").status_code == 200
     assert c.get("/users/me").status_code == 401
     db = SessionLocal()
