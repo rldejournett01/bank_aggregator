@@ -6,6 +6,25 @@ export function getErrorMessage(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback;
 }
 
+/**
+ * FastAPI/Pydantic validation errors (422) return `detail` as an array of
+ * {loc, msg, type} objects rather than a string. Join the messages into
+ * something readable instead of dumping raw JSON in the UI.
+ */
+function formatDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((d) => (d && typeof d === "object" && "msg" in d ? String((d as { msg: unknown }).msg) : null))
+      .filter((m): m is string => Boolean(m))
+      // Pydantic prefixes custom `raise ValueError(...)` messages with
+      // "Value error, " — strip it for a clean, user-facing message.
+      .map((m) => m.replace(/^Value error,\s*/, ""));
+    if (messages.length) return messages.join(" ");
+  }
+  return JSON.stringify(detail);
+}
+
 // Auth now lives in httpOnly cookies — the browser attaches them automatically
 // when we send credentials. The optional `token` param is kept for backward
 // compatibility (and server-side callers) but is no longer required.
@@ -52,7 +71,7 @@ async function request<T>(
 
   if (!res.ok) {
     const detail = data?.detail ?? data ?? "Request failed";
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(formatDetail(detail));
   }
   return data as T;
 }
