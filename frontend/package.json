@@ -9,13 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.3.1",
-    "next": "16.2.9",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "@tailwindcss/cli": "^4.3.3",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "react-plaid-link": "^4.1.1",
-    "recharts": "^3.9.0",
-    "tailwindcss": "^4.3.1"
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -24,7 +24,7 @@
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.3.0",
     "typescript": "^5"
   }
 }
